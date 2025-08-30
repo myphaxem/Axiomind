@@ -36,12 +36,24 @@ fn play_parses_args() {
 }
 
 #[test]
+fn invalid_vs_value_shows_error() {
+    let mut out: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
+    let code = run(["axm", "play", "--vs", "robot"], &mut out, &mut err);
+    assert_ne!(code, 0);
+    let stderr = String::from_utf8_lossy(&err);
+    // clap error message should mention invalid value
+    assert!(stderr.to_lowercase().contains("invalid value"));
+}
+
+#[test]
 fn cfg_reads_env_and_file_with_validation() {
     use std::fs;
     use std::path::PathBuf;
     // Prepare config file
     let mut p = PathBuf::from("target");
     p.push(format!("axm_cfg_{}.toml", std::process::id()));
+    if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).unwrap(); }
     fs::write(&p, "seed = 456\nlevel = 3\n").unwrap();
     std::env::set_var("AXM_CONFIG", &p);
     std::env::set_var("AXM_SEED", "123"); // env should override file

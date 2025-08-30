@@ -1,32 +1,42 @@
 use std::io::Write;
 use clap::{Parser, Subcommand, ValueEnum};
+mod config;
+pub mod ui;
 
 /// Runs the CLI with provided args, writing to the given writers.
 /// Returns the intended process exit code.
-pub fn run<I, S>(args: I, out: &mut dyn Write, _err: &mut dyn Write) -> i32
+pub fn run<I, S>(args: I, out: &mut dyn Write, err: &mut dyn Write) -> i32
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
     let argv: Vec<String> = args.into_iter().map(|s| s.as_ref().to_string()).collect();
+    if argv.iter().any(|a| a == "--help" || a == "-h") {
+        let _ = writeln!(out, "Axiomind Poker CLI\n");
+        let _ = writeln!(out, "Usage: axm <command> [options]\n");
+        let _ = writeln!(out, "Commands:");
+        for c in [
+            "play", "replay", "stats", "verify", "deal", "bench",
+            "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
+        ] { let _ = writeln!(out, "  {}", c); }
+        let _ = writeln!(out, "\nOptions:\n  -h, --help     Show this help");
+        return 0;
+    }
+
     let parsed = AxmCli::try_parse_from(&argv);
     match parsed {
-        Err(_) => {
-            // minimal help output per tests
-            let _ = writeln!(out, "Axiomind Poker CLI\n");
-            let _ = writeln!(out, "Usage: axm <command> [options]\n");
-            let _ = writeln!(out, "Commands:");
-            for c in [
-                "play", "replay", "stats", "verify", "deal", "bench",
-                "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
-            ] { let _ = writeln!(out, "  {}", c); }
-            let _ = writeln!(out, "\nOptions:\n  -h, --help     Show this help");
-            0
+        Err(e) => {
+            let _ = writeln!(out, "Axiomind Poker CLI");
+            let _ = writeln!(out, "Use --help for usage.");
+            let _ = writeln!(err, "{}", e);
+            2
         }
         Ok(cli) => match cli.cmd {
             Commands::Cfg => {
-                let _ = writeln!(out, "{{\"starting_stack\": 20000, \"level\": 1, \"seed\": null}}");
-                0
+                match config::load() {
+                    Ok(c) => { let _ = writeln!(out, "{}", serde_json::to_string_pretty(&c).unwrap()); 0 }
+                    Err(e) => { let _ = ui::write_error(err, &format!("Invalid configuration: {}", e)); 2 }
+                }
             }
             Commands::Play { vs, hands, seed } => {
                 let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands.unwrap_or(0), seed.unwrap_or(0));
