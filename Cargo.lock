@@ -89,7 +89,10 @@ dependencies = [
 name = "axm_cli"
 version = "0.1.0"
 dependencies = [
+ "axm-engine",
  "clap",
+ "rand",
+ "rand_chacha",
  "serde",
  "serde_json",
  "toml",

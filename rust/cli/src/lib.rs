@@ -41,11 +41,13 @@ where
                     Err(e) => { let _ = ui::write_error(err, &format!("Invalid configuration: {}", e)); 2 }
                 }
             }
-            Commands::Play { vs, hands, seed } => {
+            Commands::Play { vs, hands, seed, level } => {
                 let hands = hands.unwrap_or(1);
                 let seed = seed.unwrap_or(0);
+                let level = level.unwrap_or(1);
                 let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands, seed);
-                let mut eng = Engine::new(Some(seed), 1);
+                let _ = writeln!(out, "Level: {}", level);
+                let mut eng = Engine::new(Some(seed), level);
                 eng.shuffle();
                 let scripted = std::env::var("AXM_TEST_INPUT").ok();
                 let mut played = 0u32;
@@ -66,6 +68,7 @@ where
                     }
                     played += 1;
                 }
+                let _ = writeln!(out, "Session hands={}", hands);
                 let _ = writeln!(out, "Hands played: {} (completed)", played);
                 0
             }
@@ -83,7 +86,7 @@ struct AxmCli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64> },
+    Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64>, #[arg(long)] level: Option<u8> },
     Replay { #[arg(long)] input: String },
     Stats { #[arg(long)] input: String },
     Verify,
