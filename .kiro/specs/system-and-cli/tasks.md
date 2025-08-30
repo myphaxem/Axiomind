@@ -7,13 +7,13 @@
   - _Requirements: 1.1, 1.2_
 
 - [ ] 2. Implement core data structures and types
-- [ ] 2.1 Create card and deck representations
+ - [x] 2.1 Create card and deck representations
   - Define Card struct with suit and rank enums
   - Implement Deck struct with shuffling and dealing methods
   - Write unit tests for card operations and deck functionality
   - _Requirements: 1.2, 1.6_
 
-- [ ] 2.2 Implement player and game state structures
+ - [x] 2.2 Implement player and game state structures
   - Create Player struct with stack, cards, and position tracking
   - Define PlayerAction enum with all possible actions
   - Implement GameState struct to track current game status
