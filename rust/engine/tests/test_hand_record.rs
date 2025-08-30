@@ -17,6 +17,8 @@ fn hand_record_serializes_and_deserializes() {
             Card { suit: Suit::Clubs, rank: Rank::Ace },
         ],
         result: Some("p0 wins".to_string()),
+        ts: None,
+        meta: None,
     };
 
     let s = serde_json::to_string(&rec).expect("serialize");
@@ -29,4 +31,3 @@ fn id_format_matches_spec() {
     let id = format_hand_id("20251231", 42);
     assert_eq!(id, "20251231-000042");
 }
-
