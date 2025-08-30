@@ -82,6 +82,26 @@ where
                     Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); 2 }
                 }
             }
+            Commands::Stats { input } => {
+                match std::fs::read_to_string(&input) {
+                    Ok(content) => {
+                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64;
+                        for line in content.lines().filter(|l| !l.trim().is_empty()) {
+                            hands += 1;
+                            if let Ok(rec) = serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
+                                if let Some(r) = rec.result.as_deref() {
+                                    if r == "p0" { p0 += 1; }
+                                    if r == "p1" { p1 += 1; }
+                                }
+                            }
+                        }
+                        let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
+                        let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
+                        0
+                    }
+                    Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); 2 }
+                }
+            }
             _ => 0,
         }
     }
