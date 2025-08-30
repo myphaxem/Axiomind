@@ -34,3 +34,32 @@ fn play_parses_args() {
     let stdout = String::from_utf8_lossy(&out);
     assert!(stdout.contains("play: vs=human hands=3 seed=42"));
 }
+
+#[test]
+fn cfg_reads_env_and_file_with_validation() {
+    use std::fs;
+    use std::path::PathBuf;
+    // Prepare config file
+    let mut p = PathBuf::from("target");
+    p.push(format!("axm_cfg_{}.toml", std::process::id()));
+    fs::write(&p, "seed = 456\nlevel = 3\n").unwrap();
+    std::env::set_var("AXM_CONFIG", &p);
+    std::env::set_var("AXM_SEED", "123"); // env should override file
+
+    let mut out: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
+    let code = run(["axm", "cfg"], &mut out, &mut err);
+    assert_eq!(code, 0);
+    let stdout = String::from_utf8_lossy(&out);
+    assert!(stdout.contains("\"seed\": 123"));
+    assert!(stdout.contains("\"level\": 3"));
+
+    // invalid level -> non-zero and error message
+    std::env::set_var("AXM_LEVEL", "0");
+    let mut out2: Vec<u8> = Vec::new();
+    let mut err2: Vec<u8> = Vec::new();
+    let code2 = run(["axm", "cfg"], &mut out2, &mut err2);
+    assert_ne!(code2, 0);
+    let stderr = String::from_utf8_lossy(&err2);
+    assert!(stderr.contains("Invalid configuration"));
+}
