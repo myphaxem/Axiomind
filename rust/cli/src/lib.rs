@@ -72,6 +72,16 @@ where
                 let _ = writeln!(out, "Hands played: {} (completed)", played);
                 0
             }
+            Commands::Replay { input } => {
+                match std::fs::read_to_string(&input) {
+                    Ok(content) => {
+                        let count = content.lines().filter(|l| !l.trim().is_empty()).count();
+                        let _ = writeln!(out, "Replayed: {} hands", count);
+                        0
+                    }
+                    Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); 2 }
+                }
+            }
             _ => 0,
         }
     }
