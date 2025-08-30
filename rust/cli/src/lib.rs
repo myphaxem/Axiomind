@@ -4,7 +4,7 @@ mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
 use rand_chacha::ChaCha20Rng;
-use rand::{SeedableRng, RngCore};
+use rand::{SeedableRng, RngCore, seq::SliceRandom};
 
 /// Runs the CLI with provided args, writing to the given writers.
 /// Returns the intended process exit code.
@@ -188,6 +188,51 @@ where
                 let _ = writeln!(out, "Simulated: {} hands", completed);
                 0
             }
+            Commands::Export { input, format, output } => {
+                let content = match std::fs::read_to_string(&input) { Ok(c)=>c, Err(e)=>{ let _=ui::write_error(err,&format!("Failed to read {}: {}", input, e)); return 2; } };
+                match format.as_str() {
+                    f if f.eq_ignore_ascii_case("csv") => {
+                        let mut w = std::fs::File::create(&output).map(|f| std::io::BufWriter::new(f)).map_err(|e| { let _=ui::write_error(err,&format!("Failed to write {}: {}", output, e)); e }).unwrap();
+                        let _ = writeln!(w, "hand_id,seed,result,ts,actions,board");
+                        for line in content.lines().filter(|l| !l.trim().is_empty()) {
+                            let rec: axm_engine::logger::HandRecord = serde_json::from_str(line).unwrap();
+                            let seed = rec.seed.map(|v| v.to_string()).unwrap_or_else(||"".into());
+                            let result = rec.result.unwrap_or_default();
+                            let ts = rec.ts.unwrap_or_default();
+                            let _ = writeln!(w, "{},{},{},{},{},{}", rec.hand_id, seed, result, ts, rec.actions.len(), rec.board.len());
+                        }
+                        0
+                    }
+                    f if f.eq_ignore_ascii_case("json") => {
+                        let mut arr = Vec::new();
+                        for line in content.lines().filter(|l| !l.trim().is_empty()) { let v: serde_json::Value = serde_json::from_str(line).unwrap(); arr.push(v); }
+                        let s = serde_json::to_string_pretty(&arr).unwrap();
+                        std::fs::write(&output, s).unwrap();
+                        0
+                    }
+                    _ => { let _ = ui::write_error(err, "Unsupported format"); 2 }
+                }
+            }
+            Commands::Dataset { input, outdir, train, val, test, seed } => {
+                let content = std::fs::read_to_string(&input).map_err(|e|{ let _=ui::write_error(err,&format!("Failed to read {}: {}", input, e)); e }).unwrap();
+                let mut lines: Vec<String> = content.lines().filter(|l| !l.trim().is_empty()).map(|s| s.to_string()).collect();
+                let n = lines.len(); if n==0 { let _=ui::write_error(err, "Empty input"); return 2; }
+                let tr = train.unwrap_or(0.8); let va = val.unwrap_or(0.1); let te = test.unwrap_or(0.1);
+                let sum = tr+va+te; if (sum-1.0).abs() > 1e-6 { let _=ui::write_error(err, "Splits must sum to 1.0"); return 2; }
+                let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed.unwrap_or(0));
+                lines.shuffle(&mut rng);
+                let n_tr = ((tr * n as f64).round() as usize).min(n);
+                let n_va = ((va * n as f64).round() as usize).min(n.saturating_sub(n_tr));
+                let n_te = n.saturating_sub(n_tr + n_va);
+                let (trv, rest) = lines.split_at(n_tr);
+                let (vav, tev) = rest.split_at(n_va);
+                std::fs::create_dir_all(&outdir).unwrap();
+                let w = |p:&std::path::Path, it: &[String]|{ let mut f = std::fs::File::create(p).unwrap(); for l in it { let _=writeln!(f, "{}", l); } };
+                w(&std::path::Path::new(&outdir).join("train.jsonl"), trv);
+                w(&std::path::Path::new(&outdir).join("val.jsonl"), vav);
+                w(&std::path::Path::new(&outdir).join("test.jsonl"), tev);
+                0
+            }
             _ => 0,
         }
     }
@@ -210,8 +255,8 @@ enum Commands {
     Deal { #[arg(long)] seed: Option<u64> },
     Bench,
     Sim { #[arg(long)] hands: u64, #[arg(long)] output: Option<String>, #[arg(long)] seed: Option<u64>, #[arg(long)] resume: Option<String> },
-    Export,
-    Dataset,
+    Export { #[arg(long)] input: String, #[arg(long)] format: String, #[arg(long)] output: String },
+    Dataset { #[arg(long)] input: String, #[arg(long)] outdir: String, #[arg(long)] train: Option<f64>, #[arg(long)] val: Option<f64>, #[arg(long)] test: Option<f64>, #[arg(long)] seed: Option<u64> },
     Cfg,
     Doctor,
     Rng { #[arg(long)] seed: Option<u64> },
