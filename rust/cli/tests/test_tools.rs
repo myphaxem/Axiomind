@@ -21,7 +21,7 @@ fn verify_checks_records() {
         board: vec![
             Card{suit:S::Clubs,rank:R::Ace},Card{suit:S::Diamonds,rank:R::Two},Card{suit:S::Hearts,rank:R::Three},
             Card{suit:S::Spades,rank:R::Four},Card{suit:S::Clubs,rank:R::Five}
-        ], result: Some("p0".into()), ts: None, meta: None
+        ], result: Some("p0".into()), ts: None, meta: None, showdown: None
     };
     let mut s = String::new(); s.push_str(&serde_json::to_string(&rec).unwrap()); s.push('\n');
     fs::write(&path, s).unwrap();
@@ -54,4 +54,3 @@ fn bench_runs_quickly() {
     let stdout = String::from_utf8_lossy(&out);
     assert!(stdout.contains("Benchmark:"));
 }
-

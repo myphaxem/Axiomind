@@ -19,6 +19,7 @@ fn hand_record_serializes_and_deserializes() {
         result: Some("p0 wins".to_string()),
         ts: None,
         meta: None,
+        showdown: None,
     };
 
     let s = serde_json::to_string(&rec).expect("serialize");

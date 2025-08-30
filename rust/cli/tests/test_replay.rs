@@ -19,7 +19,7 @@ fn replay_counts_hands_and_prints_summary() {
     // build two records
     let rec1 = HandRecord {
         hand_id: "20250102-000001".into(), seed: Some(1), actions: vec![ActionRecord { player_id: 0, street: Street::Preflop, action: A::Bet(50) }],
-        board: vec![Card { suit: S::Clubs, rank: R::Ace }], result: Some("p0".into()), ts: None, meta: None,
+        board: vec![Card { suit: S::Clubs, rank: R::Ace }], result: Some("p0".into()), ts: None, meta: None, showdown: None,
     };
     let rec2 = HandRecord { hand_id: "20250102-000002".into(), ..rec1.clone() };
     let mut s = String::new();
@@ -34,4 +34,3 @@ fn replay_counts_hands_and_prints_summary() {
     let stdout = String::from_utf8_lossy(&out);
     assert!(stdout.contains("Replayed: 2 hands"));
 }
-

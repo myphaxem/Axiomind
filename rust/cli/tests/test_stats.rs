@@ -16,7 +16,7 @@ fn tmp_jsonl(name: &str) -> PathBuf {
 #[test]
 fn stats_outputs_summary_json() {
     let path = tmp_jsonl("stats");
-    let base = HandRecord { hand_id: "20250102-000001".into(), seed: Some(1), actions: vec![ActionRecord{player_id:0,street:Street::Preflop,action:A::Bet(10)}], board: vec![Card{suit:S::Clubs,rank:R::Ace}], result: Some("p0".into()), ts: None, meta: None };
+    let base = HandRecord { hand_id: "20250102-000001".into(), seed: Some(1), actions: vec![ActionRecord{player_id:0,street:Street::Preflop,action:A::Bet(10)}], board: vec![Card{suit:S::Clubs,rank:R::Ace}], result: Some("p0".into()), ts: None, meta: None, showdown: None };
     let r2 = HandRecord { hand_id: "20250102-000002".into(), result: Some("p1".into()), ..base.clone() };
     let r3 = HandRecord { hand_id: "20250102-000003".into(), result: Some("p0".into()), ..base.clone() };
     let mut s = String::new();
@@ -33,4 +33,3 @@ fn stats_outputs_summary_json() {
     assert!(stdout.contains("\"p0\": 2"));
     assert!(stdout.contains("\"p1\": 1"));
 }
-

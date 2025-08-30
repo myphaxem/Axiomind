@@ -23,6 +23,7 @@ fn writes_jsonl_with_lf_only() {
         result: Some("p0".to_string()),
         ts: None,
         meta: None,
+        showdown: None,
     };
     logger.write(&rec).expect("write");
     let bytes = fs::read(&path).expect("read file");
@@ -44,7 +45,7 @@ fn ts_is_generated_when_missing_and_preserved_when_present() {
     // missing ts -> logger should inject it
     let rec = HandRecord {
         hand_id: "20250102-000010".to_string(), seed: Some(7), actions: vec![],
-        board: vec![Card { suit: S::Clubs, rank: R::Ace }], result: None, ts: None, meta: None,
+        board: vec![Card { suit: S::Clubs, rank: R::Ace }], result: None, ts: None, meta: None, showdown: None,
     };
     logger.write(&rec).expect("write");
     let line = String::from_utf8(fs::read(&path).unwrap()).unwrap();

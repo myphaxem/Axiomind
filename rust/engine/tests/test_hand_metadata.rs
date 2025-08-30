@@ -11,6 +11,7 @@ fn hand_record_supports_timestamp_and_metadata() {
         result: None,
         ts: Some("2025-01-02T03:04:05Z".to_string()),
         meta: Some(serde_json::json!({"note":"test"})),
+        showdown: None,
     };
     let s = serde_json::to_string(&rec).unwrap();
     assert!(s.contains("\"ts\":"));
@@ -18,4 +19,3 @@ fn hand_record_supports_timestamp_and_metadata() {
     let back: HandRecord = serde_json::from_str(&s).unwrap();
     assert_eq!(back.ts.as_deref(), Some("2025-01-02T03:04:05Z"));
 }
-

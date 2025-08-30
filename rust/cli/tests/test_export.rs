@@ -9,7 +9,7 @@ fn mk_jsonl(name: &str, n: usize) -> PathBuf {
     let mut p = PathBuf::from("target");
     p.push(format!("{}_{}.jsonl", name, std::process::id()));
     if let Some(parent) = p.parent() { let _ = fs::create_dir_all(parent); }
-    let base = HandRecord { hand_id: "20250102-000001".into(), seed: Some(1), actions: vec![ActionRecord{player_id:0,street:Street::Preflop,action:A::Bet(10)}], board: vec![Card{suit:S::Clubs,rank:R::Ace}], result: Some("p0".into()), ts: None, meta: None };
+    let base = HandRecord { hand_id: "20250102-000001".into(), seed: Some(1), actions: vec![ActionRecord{player_id:0,street:Street::Preflop,action:A::Bet(10)}], board: vec![Card{suit:S::Clubs,rank:R::Ace}], result: Some("p0".into()), ts: None, meta: None, showdown: None };
     let mut s = String::new();
     for i in 0..n { let mut r = base.clone(); r.hand_id = format!("20250102-{:06}", i+1); s.push_str(&serde_json::to_string(&r).unwrap()); s.push('\n'); }
     fs::write(&p, s).unwrap();
@@ -44,4 +44,3 @@ fn export_to_json_array() {
     assert!(v.is_array());
     assert_eq!(v.as_array().unwrap().len(), 2);
 }
-
