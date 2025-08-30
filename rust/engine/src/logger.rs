@@ -20,6 +20,10 @@ pub struct HandRecord {
     pub actions: Vec<ActionRecord>,
     pub board: Vec<Card>,
     pub result: Option<String>,
+    #[serde(default)]
+    pub ts: Option<String>,
+    #[serde(default)]
+    pub meta: Option<serde_json::Value>,
 }
 
 pub fn format_hand_id(yyyymmdd: &str, seq: u32) -> String {
