@@ -62,14 +62,14 @@
     - Implement pot distribution logic for multiple all-ins
     - Add winner determination and chip distribution
     - Write unit tests for complex pot scenarios
-    - _Requirements: 1.4_
+  - _Requirements: 1.4_
 
-- [ ] 4.4 Implement game flow and street progression
-  - Create street progression logic (preflop, flop, turn, river)
-  - Implement showdown logic and automatic mucking
-  - Add game termination conditions and winner determination
-  - Write integration tests for complete hand scenarios
-  - _Requirements: 1.1, 1.4, 1.5_
+  - [x] 4.4 Implement game flow and street progression
+    - Create street progression logic (preflop, flop, turn, river)
+    - Implement showdown logic and automatic mucking
+    - Add game termination conditions and winner determination
+    - Write integration tests for complete hand scenarios
+    - _Requirements: 1.1, 1.4, 1.5_
 
 - [ ] 5. Implement hand history logging system
 - [ ] 5.1 Create JSONL logging functionality
