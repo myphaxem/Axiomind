@@ -25,7 +25,7 @@
   - Implement serialization/deserialization for JSON format
   - Create ActionRecord and ShowdownInfo supporting structures
   - Write unit tests for data serialization accuracy
-  - _Requirements: 2.1, 2.2, 2.3, 2.4_
+ - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
 - [ ] 3. Implement hand evaluation system
 - [ ] 3.1 Create hand ranking and evaluation logic

@@ -1,4 +1,5 @@
 use crate::cards::Card;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Position {
@@ -6,7 +7,7 @@ pub enum Position {
     BigBlind,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PlayerAction {
     Fold,
     Check,
@@ -54,4 +55,3 @@ impl Player {
         Ok(())
     }
 }
-
