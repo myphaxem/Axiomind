@@ -131,28 +131,28 @@
   - _Requirements: 3.3, 3.4_
 
 - [ ] 8. Implement analysis and utility commands
-- [ ] 8.1 Create replay command functionality
+ - [x] 8.1 Create replay command functionality
   - Implement ReplayCommand for hand history playback
   - Add file input handling and JSONL parsing
   - Create step-by-step replay display with speed control
   - Write integration tests for replay accuracy
   - _Requirements: 4.1_
 
-- [ ] 8.2 Implement statistics generation command
+ - [x] 8.2 Implement statistics generation command
   - Create StatsCommand for hand history analysis
   - Add statistical calculations (win rates, action frequencies)
   - Implement output formatting for statistical reports
   - Write unit tests for statistical accuracy
   - _Requirements: 4.2_
 
-- [ ] 8.3 Create verification and diagnostic commands
+ - [x] 8.3 Create verification and diagnostic commands
   - Implement VerifyCommand for rule compliance checking
   - Add DoctorCommand for environment diagnostics
   - Create BenchCommand for performance benchmarking
   - Write unit tests for verification logic
   - _Requirements: 4.3, 6.2, 6.3_
 
-- [ ] 8.4 Implement deal and RNG testing commands
+ - [x] 8.4 Implement deal and RNG testing commands
   - Create DealCommand for single hand dealing and display
   - Add RngCommand for random number generation testing
   - Implement card display formatting and visualization

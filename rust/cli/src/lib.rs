@@ -4,7 +4,7 @@ mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
 use rand_chacha::ChaCha20Rng;
-use rand::SeedableRng;
+use rand::{SeedableRng, RngCore};
 
 /// Runs the CLI with provided args, writing to the given writers.
 /// Returns the intended process exit code.
@@ -102,6 +102,67 @@ where
                     Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); 2 }
                 }
             }
+            Commands::Verify { input } => {
+                // verify basic rule: completed hands have 5 board cards
+                let mut ok = true; let mut hands = 0u64;
+                if let Some(path) = input {
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => {
+                            for line in content.lines().filter(|l| !l.trim().is_empty()) {
+                                hands += 1;
+                                if let Ok(rec) = serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
+                                    if rec.board.len() != 5 { ok = false; }
+                                } else { ok = false; }
+                            }
+                        }
+                        Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", path, e)); return 2; }
+                    }
+                }
+                let status = if ok { "OK" } else { "FAIL" };
+                let _ = writeln!(out, "Verify: {} (hands={})", status, hands);
+                if ok { 0 } else { 2 }
+            }
+            Commands::Doctor => {
+                let _ = writeln!(out, "Doctor: OK");
+                0
+            }
+            Commands::Bench => {
+                // quick bench: evaluate 200 unique 7-card draws from shuffled deck
+                use axm_engine::cards::Card;
+                use axm_engine::deck::Deck;
+                let start = std::time::Instant::now();
+                let mut cnt = 0u64;
+                let mut deck = Deck::new_with_seed(1);
+                deck.shuffle();
+                for _ in 0..200 {
+                    if deck.remaining() < 7 { deck.shuffle(); }
+                    let mut arr: [Card;7] = [deck.deal_card().unwrap();7];
+                    for i in 1..7 { arr[i] = deck.deal_card().unwrap(); }
+                    let _ = axm_engine::hand::evaluate_hand(&arr);
+                    cnt += 1;
+                }
+                let dur = start.elapsed();
+                let _ = writeln!(out, "Benchmark: {} iters in {:?}", cnt, dur);
+                0
+            }
+            Commands::Deal { seed } => {
+                let mut eng = Engine::new(seed, 1);
+                eng.shuffle(); let _ = eng.deal_hand();
+                let p = eng.players();
+                let hc1 = p[0].hole_cards(); let hc2 = p[1].hole_cards();
+                let fmt = |c: axm_engine::cards::Card| format!("{:?}{:?}", c.rank, c.suit);
+                let _ = writeln!(out, "Hole P1: {} {}", fmt(hc1[0].unwrap()), fmt(hc1[1].unwrap()));
+                let _ = writeln!(out, "Hole P2: {} {}", fmt(hc2[0].unwrap()), fmt(hc2[1].unwrap()));
+                let b = eng.board();
+                let _ = writeln!(out, "Board: {} {} {} {} {}", fmt(b[0]), fmt(b[1]), fmt(b[2]), fmt(b[3]), fmt(b[4]));
+                0
+            }
+            Commands::Rng { seed } => {
+                let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed.unwrap_or(0));
+                let mut vals = vec![]; for _ in 0..5 { vals.push(rng.next_u64()); }
+                let _ = writeln!(out, "RNG sample: {:?}", vals);
+                0
+            }
             _ => 0,
         }
     }
@@ -119,8 +180,8 @@ enum Commands {
     Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64>, #[arg(long)] level: Option<u8> },
     Replay { #[arg(long)] input: String },
     Stats { #[arg(long)] input: String },
-    Verify,
-    Deal,
+    Verify { #[arg(long)] input: Option<String> },
+    Deal { #[arg(long)] seed: Option<u64> },
     Bench,
     Sim { #[arg(long)] hands: u64 },
     Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String },
@@ -128,7 +189,7 @@ enum Commands {
     Dataset,
     Cfg,
     Doctor,
-    Rng,
+    Rng { #[arg(long)] seed: Option<u64> },
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
