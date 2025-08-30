@@ -26,3 +26,11 @@ fn cfg_shows_default_settings() {
     assert!(stdout.contains("\"level\": 1"));
 }
 
+#[test]
+fn play_parses_args() {
+    let mut out: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
+    let _code = run(["axm", "play", "--vs", "human", "--hands", "3", "--seed", "42"], &mut out, &mut err);
+    let stdout = String::from_utf8_lossy(&out);
+    assert!(stdout.contains("play: vs=human hands=3 seed=42"));
+}
