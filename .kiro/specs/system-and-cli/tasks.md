@@ -72,7 +72,7 @@
     - _Requirements: 1.1, 1.4, 1.5_
 
 - [ ] 5. Implement hand history logging system
-- [ ] 5.1 Create JSONL logging functionality
+- [x] 5.1 Create JSONL logging functionality
   - Implement HandLogger struct for writing hand records
   - Add JSONL file management with proper formatting
   - Create unique hand ID generation system

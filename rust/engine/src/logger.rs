@@ -26,3 +26,35 @@ pub fn format_hand_id(yyyymmdd: &str, seq: u32) -> String {
     format!("{}-{:06}", yyyymmdd, seq)
 }
 
+use std::fs::{File, create_dir_all};
+use std::io::{BufWriter, Write};
+use std::path::Path;
+
+pub struct HandLogger {
+    writer: Option<BufWriter<File>>,
+    date: String,
+    seq: u32,
+}
+
+impl HandLogger {
+    pub fn create<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        if let Some(parent) = path.as_ref().parent() { if !parent.as_os_str().is_empty() { let _ = create_dir_all(parent); } }
+        let f = File::create(path)?;
+        Ok(Self { writer: Some(BufWriter::new(f)), date: "19700101".to_string(), seq: 0 })
+    }
+
+    pub fn with_seq_for_test(date: &str) -> Self {
+        Self { writer: None, date: date.to_string(), seq: 0 }
+    }
+
+    pub fn next_id(&mut self) -> String {
+        self.seq += 1;
+        format_hand_id(&self.date, self.seq)
+    }
+
+    pub fn write(&mut self, record: &HandRecord) -> std::io::Result<()> {
+        let line = serde_json::to_string(record).expect("serialize");
+        if let Some(w) = &mut self.writer { w.write_all(line.as_bytes())?; w.write_all(b"\n")?; w.flush()?; }
+        Ok(())
+    }
+}
