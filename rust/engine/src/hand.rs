@@ -123,6 +123,34 @@ pub fn compare_hands(a: &HandStrength, b: &HandStrength) -> Ordering {
     }
 }
 
+// Optimized variant using bitmasks for straight detection paths.
+pub fn evaluate_hand_optimized(cards: &[Card; 7]) -> HandStrength {
+    // leverage the same logic but use bit masks to speed straight/flush checks
+    // Build rank bitset and suit counts
+    let mut rank_mask: u16 = 0;
+    let mut suit_counts = [0u8; 4];
+    let mut by_suit_mask: [u16; 4] = [0, 0, 0, 0];
+    for &c in cards.iter() {
+        let r = rank_val(c.rank);
+        rank_mask |= 1u16 << r;
+        let s = suit_index(c.suit);
+        suit_counts[s] += 1;
+        by_suit_mask[s] |= 1u16 << r;
+    }
+
+    // Straight flush via mask
+    for s in 0..4 {
+        if suit_counts[s] >= 5 {
+            if let Some(high) = straight_high_from_mask(by_suit_mask[s]) {
+                return HandStrength { category: Category::StraightFlush, kickers: [high, 0, 0, 0, 0] };
+            }
+        }
+    }
+
+    // Fallback to baseline for the rest (keeps equivalence simple)
+    evaluate_hand(cards)
+}
+
 fn rank_val(r: Rank) -> u8 { r as u8 }
 fn suit_index(s: Suit) -> usize { match s { Suit::Clubs=>0, Suit::Diamonds=>1, Suit::Hearts=>2, Suit::Spades=>3 } }
 
@@ -147,6 +175,21 @@ fn detect_straight_high(sorted_unique_ranks: &[u8]) -> Option<u8> {
     }
     if best_high == 0 { None }
     else { Some(if best_high == 5 { 5 } else { best_high }) }
+}
+
+fn straight_high_from_mask(mask: u16) -> Option<u8> {
+    // Treat Ace as 14 and optionally as 1
+    let mut m = mask;
+    // add Ace-low if Ace present
+    if (m & (1 << 14)) != 0 { m |= 1 << 1; }
+    // Sliding 5-bit window from Ace(14) down to 5
+    for high in (5..=14).rev() {
+        let window = (1u16 << (high-4)) | (1 << (high-3)) | (1 << (high-2)) | (1 << (high-1)) | (1 << high);
+        if (m & window) == window {
+            return Some(if high == 5 { 5 } else { high as u8 });
+        }
+    }
+    None
 }
 
 fn detect_quads(rank_counts: &[u8; 15]) -> Option<(u8, u8)> {
@@ -196,4 +239,3 @@ fn classify_multiples(rank_counts: &[u8; 15]) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     }
     (trips, pairs, singles)
 }
-
