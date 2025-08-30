@@ -6,3 +6,6 @@ pub mod player;
 pub mod game;
 pub mod logger;
 pub mod hand;
+pub mod engine;
+pub mod rules;
+pub mod errors;

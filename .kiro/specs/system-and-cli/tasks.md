@@ -48,14 +48,14 @@
    - Add blind structure and level management
    - Create random number generator integration with seed support
    - Write unit tests for game setup with various configurations
-   - _Requirements: 1.1, 1.6, 3.4_
+  - _Requirements: 1.1, 1.6, 3.4_
 
-- [ ] 4.2 Implement betting rules and action validation
-  - Create action validation logic for all player actions
-  - Implement minimum raise and all-in handling
-  - Add bet sizing validation and automatic correction
-  - Write unit tests for all betting scenarios and edge cases
-  - _Requirements: 1.3, 3.2, 3.3_
+  - [x] 4.2 Implement betting rules and action validation
+    - Create action validation logic for all player actions
+    - Implement minimum raise and all-in handling
+    - Add bet sizing validation and automatic correction
+    - Write unit tests for all betting scenarios and edge cases
+    - _Requirements: 1.3, 3.2, 3.3_
 
 - [ ] 4.3 Implement pot management and side pot logic
   - Create PotManager struct for main and side pot handling
