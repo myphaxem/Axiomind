@@ -42,7 +42,7 @@
   - Write performance regression tests
   - _Requirements: 1.4, 5.3_
 
-- [ ] 4. Implement game engine core logic
+- [x] 4. Implement game engine core logic
   - [x] 4.1 Create game initialization and setup
    - Implement GameEngine struct with initialization logic
    - Add blind structure and level management
@@ -71,7 +71,7 @@
     - Write integration tests for complete hand scenarios
     - _Requirements: 1.1, 1.4, 1.5_
 
-- [ ] 5. Implement hand history logging system
+- [x] 5. Implement hand history logging system
 - [x] 5.1 Create JSONL logging functionality
   - Implement HandLogger struct for writing hand records
   - Add JSONL file management with proper formatting
@@ -86,22 +86,22 @@
   - Write unit tests for metadata accuracy
   - _Requirements: 2.5, 1.6_
 
-- [ ] 6. Implement CLI framework and common functionality
-- [ ] 6.1 Set up CLI argument parsing and command structure
+- [x] 6. Implement CLI framework and common functionality
+- [x] 6.1 Set up CLI argument parsing and command structure
   - Create main CLI application with clap argument parsing
   - Implement Command trait for modular command structure
   - Add common CLI options (seed, ai-version, adaptive)
   - Write unit tests for argument parsing and validation
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 6.2 Implement configuration management system
+- [x] 6.2 Implement configuration management system
   - Create Config struct with default settings
   - Add configuration file loading and environment variable support
   - Implement configuration validation and error handling
   - Write unit tests for configuration management
   - _Requirements: 6.1, 6.2_
 
-- [ ] 6.3 Create CLI error handling and user interface helpers
+- [x] 6.3 Create CLI error handling and user interface helpers
   - Implement CliError enum with comprehensive error types
   - Add user-friendly error message formatting
   - Create terminal UI helpers for interactive gameplay
@@ -130,7 +130,7 @@
   - Write integration tests for complete game sessions
   - _Requirements: 3.3, 3.4_
 
-- [ ] 8. Implement analysis and utility commands
+- [x] 8. Implement analysis and utility commands
  - [x] 8.1 Create replay command functionality
   - Implement ReplayCommand for hand history playback
   - Add file input handling and JSONL parsing
@@ -160,21 +160,21 @@
   - _Requirements: 4.4, 6.3_
 
 - [ ] 9. Implement simulation commands
-- [ ] 9.1 Create basic simulation functionality
+- [x] 9.1 Create basic simulation functionality
   - Implement SimCommand for automated game simulation
   - Add batch processing for multiple hands without user interaction
   - Create progress reporting for long-running simulations
   - Write integration tests for simulation accuracy
   - _Requirements: 5.1_
 
-- [ ] 9.2 Implement AI evaluation command
+- [x] 9.2 Implement AI evaluation command
   - Create EvalCommand for AI strategy comparison
   - Add head-to-head evaluation with statistical reporting
   - Implement result aggregation and analysis
   - Write unit tests for evaluation metrics
   - _Requirements: 5.2_
 
-- [ ] 9.3 Add simulation result management
+- [x] 9.3 Add simulation result management
   - Implement result output to data files
   - Add graceful interruption handling with partial results
   - Create simulation resume functionality

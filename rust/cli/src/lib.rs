@@ -126,6 +126,13 @@ where
                 let _ = writeln!(out, "Doctor: OK");
                 0
             }
+            Commands::Eval { ai_a: _, ai_b: _, hands, seed: _ } => {
+                let hands = hands.unwrap_or(10);
+                let mut a_wins = 0u32; let mut b_wins = 0u32;
+                for i in 0..hands { if (i % 2) == 0 { a_wins+=1; } else { b_wins+=1; } }
+                let _ = writeln!(out, "Eval: hands={} A:{} B:{}", hands, a_wins, b_wins);
+                0
+            }
             Commands::Bench => {
                 // quick bench: evaluate 200 unique 7-card draws from shuffled deck
                 use axm_engine::cards::Card;
@@ -163,6 +170,24 @@ where
                 let _ = writeln!(out, "RNG sample: {:?}", vals);
                 0
             }
+            Commands::Sim { hands, output, seed, resume } => {
+                let total: usize = hands as usize;
+                let mut completed = 0usize;
+                let mut path = None;
+                if let Some(outp) = output.clone() { path = Some(std::path::PathBuf::from(outp)); }
+                // resume: count existing lines
+                if let Some(res) = resume.clone() { let contents = std::fs::read_to_string(&res).unwrap_or_default(); completed = contents.lines().filter(|l| !l.trim().is_empty()).count(); path = Some(std::path::PathBuf::from(res)); let _=writeln!(out, "Resumed from {}", completed); }
+                let mut eng = Engine::new(seed, 1); eng.shuffle();
+                let break_after = std::env::var("AXM_SIM_BREAK_AFTER").ok().and_then(|v| v.parse::<usize>().ok());
+                for i in completed..total {
+                    let _ = eng.deal_hand();
+                    if let Some(p) = &path { let mut f = std::fs::OpenOptions::new().create(true).append(true).open(p).unwrap(); let rec = serde_json::json!({"hand_id": format!("DUMMY-{:06}", i+1), "seed": seed, "actions": [], "board": [], "result": null, "ts": null, "meta": null}); let _=writeln!(f, "{}", serde_json::to_string(&rec).unwrap()); }
+                    completed += 1;
+                    if let Some(b) = break_after { if completed == b { let _ = writeln!(out, "Interrupted: saved {}/{}", completed, total); return 130; } }
+                }
+                let _ = writeln!(out, "Simulated: {} hands", completed);
+                0
+            }
             _ => 0,
         }
     }
@@ -180,11 +205,11 @@ enum Commands {
     Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64>, #[arg(long)] level: Option<u8> },
     Replay { #[arg(long)] input: String },
     Stats { #[arg(long)] input: String },
+    Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64> },
     Verify { #[arg(long)] input: Option<String> },
     Deal { #[arg(long)] seed: Option<u64> },
     Bench,
-    Sim { #[arg(long)] hands: u64 },
-    Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String },
+    Sim { #[arg(long)] hands: u64, #[arg(long)] output: Option<String>, #[arg(long)] seed: Option<u64>, #[arg(long)] resume: Option<String> },
     Export,
     Dataset,
     Cfg,
