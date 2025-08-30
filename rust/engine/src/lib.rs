@@ -1,4 +1,4 @@
-//! axm-engine: Poker engine (skeleton)
+//! axm-engine: Poker engine core modules
 
-// Engine implementation will be added in subsequent TDD cycles.
-
+pub mod cards;
+pub mod deck;
