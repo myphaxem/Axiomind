@@ -53,6 +53,11 @@ where
                 let scripted = std::env::var("AXM_TEST_INPUT").ok();
                 let mut played = 0u32;
                 for i in 1..=hands {
+                    // simple level progression: +1 every 2 hands
+                    let cur_level: u8 = level.saturating_add(((i-1)/2) as u8);
+                    if i>1 { let _ = writeln!(out, "Level: {}", cur_level); }
+                    let (sb, bb) = match cur_level { 1 => (50,100), 2 => (75,150), 3 => (100,200), _ => (150,300) };
+                    let _ = writeln!(out, "Blinds: SB={} BB={}", sb, bb);
                     let _ = writeln!(out, "Hand {}", i);
                     let _ = eng.deal_hand();
                     match vs {
