@@ -43,12 +43,12 @@
   - _Requirements: 1.4, 5.3_
 
 - [ ] 4. Implement game engine core logic
-- [ ] 4.1 Create game initialization and setup
-  - Implement GameEngine struct with initialization logic
-  - Add blind structure and level management
-  - Create random number generator integration with seed support
-  - Write unit tests for game setup with various configurations
-  - _Requirements: 1.1, 1.6, 3.4_
+  - [x] 4.1 Create game initialization and setup
+   - Implement GameEngine struct with initialization logic
+   - Add blind structure and level management
+   - Create random number generator integration with seed support
+   - Write unit tests for game setup with various configurations
+   - _Requirements: 1.1, 1.6, 3.4_
 
 - [ ] 4.2 Implement betting rules and action validation
   - Create action validation logic for all player actions

@@ -4,6 +4,7 @@ use rand::{RngCore, SeedableRng};
 
 use crate::cards::{full_deck, Card};
 
+#[derive(Debug)]
 pub struct Deck {
     cards: Vec<Card>,
     position: usize,
@@ -48,4 +49,3 @@ impl Deck {
         self.cards.len().saturating_sub(self.position)
     }
 }
-
