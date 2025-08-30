@@ -1,0 +1,15 @@
+[package]
+name = "axm_cli"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "axm_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "axm"
+path = "src/main.rs"
+
+[dependencies]
+
