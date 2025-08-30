@@ -186,8 +186,25 @@ where
                 let mut eng = Engine::new(seed, 1); eng.shuffle();
                 let break_after = std::env::var("AXM_SIM_BREAK_AFTER").ok().and_then(|v| v.parse::<usize>().ok());
                 for i in completed..total {
-                    let _ = eng.deal_hand();
-                    if let Some(p) = &path { let mut f = std::fs::OpenOptions::new().create(true).append(true).open(p).unwrap(); let rec = serde_json::json!({"hand_id": format!("DUMMY-{:06}", i+1), "seed": seed, "actions": [], "board": [], "result": null, "ts": null, "meta": null}); let _=writeln!(f, "{}", serde_json::to_string(&rec).unwrap()); }
+                    // create a fresh engine per hand to avoid residual hole cards
+                    let mut e = Engine::new(seed.map(|s| s + i as u64), 1);
+                    e.shuffle();
+                    let _ = e.deal_hand();
+                    if let Some(p) = &path {
+                        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(p).unwrap();
+                        let hand_id = format!("19700101-{:06}", i+1);
+                        let board = e.board().clone();
+                        let rec = serde_json::json!({
+                            "hand_id": hand_id,
+                            "seed": seed,
+                            "actions": [],
+                            "board": board,
+                            "result": null,
+                            "ts": null,
+                            "meta": null
+                        });
+                        let _=writeln!(f, "{}", serde_json::to_string(&rec).unwrap());
+                    }
                     completed += 1;
                     if let Some(b) = break_after { if completed == b { let _ = writeln!(out, "Interrupted: saved {}/{}", completed, total); return 130; } }
                 }
