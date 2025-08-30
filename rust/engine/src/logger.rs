@@ -33,6 +33,7 @@ pub fn format_hand_id(yyyymmdd: &str, seq: u32) -> String {
 use std::fs::{File, create_dir_all};
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use chrono::{Utc, SecondsFormat};
 
 pub struct HandLogger {
     writer: Option<BufWriter<File>>,
@@ -57,7 +58,12 @@ impl HandLogger {
     }
 
     pub fn write(&mut self, record: &HandRecord) -> std::io::Result<()> {
-        let line = serde_json::to_string(record).expect("serialize");
+        // inject timestamp if missing
+        let mut rec = record.clone();
+        if rec.ts.is_none() {
+            rec.ts = Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
+        }
+        let line = serde_json::to_string(&rec).expect("serialize");
         if let Some(w) = &mut self.writer { w.write_all(line.as_bytes())?; w.write_all(b"\n")?; w.flush()?; }
         Ok(())
     }
