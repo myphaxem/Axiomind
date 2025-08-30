@@ -9,3 +9,4 @@ pub mod hand;
 pub mod engine;
 pub mod rules;
 pub mod errors;
+pub mod pot;

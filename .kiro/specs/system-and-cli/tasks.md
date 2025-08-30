@@ -55,14 +55,14 @@
     - Implement minimum raise and all-in handling
     - Add bet sizing validation and automatic correction
     - Write unit tests for all betting scenarios and edge cases
-    - _Requirements: 1.3, 3.2, 3.3_
+  - _Requirements: 1.3, 3.2, 3.3_
 
-- [ ] 4.3 Implement pot management and side pot logic
-  - Create PotManager struct for main and side pot handling
-  - Implement pot distribution logic for multiple all-ins
-  - Add winner determination and chip distribution
-  - Write unit tests for complex pot scenarios
-  - _Requirements: 1.4_
+  - [x] 4.3 Implement pot management and side pot logic
+    - Create PotManager struct for main and side pot handling
+    - Implement pot distribution logic for multiple all-ins
+    - Add winner determination and chip distribution
+    - Write unit tests for complex pot scenarios
+    - _Requirements: 1.4_
 
 - [ ] 4.4 Implement game flow and street progression
   - Create street progression logic (preflop, flop, turn, river)
