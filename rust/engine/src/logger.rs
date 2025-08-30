@@ -24,6 +24,8 @@ pub struct HandRecord {
     pub ts: Option<String>,
     #[serde(default)]
     pub meta: Option<serde_json::Value>,
+    #[serde(default)]
+    pub showdown: Option<ShowdownInfo>,
 }
 
 pub fn format_hand_id(yyyymmdd: &str, seq: u32) -> String {
@@ -39,6 +41,13 @@ pub struct HandLogger {
     writer: Option<BufWriter<File>>,
     date: String,
     seq: u32,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ShowdownInfo {
+    pub winners: Vec<usize>,
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 impl HandLogger {
