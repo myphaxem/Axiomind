@@ -2,6 +2,9 @@ use std::io::Write;
 use clap::{Parser, Subcommand, ValueEnum};
 mod config;
 pub mod ui;
+use axm_engine::engine::Engine;
+use rand_chacha::ChaCha20Rng;
+use rand::SeedableRng;
 
 /// Runs the CLI with provided args, writing to the given writers.
 /// Returns the intended process exit code.
@@ -39,7 +42,31 @@ where
                 }
             }
             Commands::Play { vs, hands, seed } => {
-                let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands.unwrap_or(0), seed.unwrap_or(0));
+                let hands = hands.unwrap_or(1);
+                let seed = seed.unwrap_or(0);
+                let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands, seed);
+                let mut eng = Engine::new(Some(seed), 1);
+                eng.shuffle();
+                let scripted = std::env::var("AXM_TEST_INPUT").ok();
+                let mut played = 0u32;
+                for i in 1..=hands {
+                    let _ = writeln!(out, "Hand {}", i);
+                    let _ = eng.deal_hand();
+                    match vs {
+                        Vs::Human => {
+                            // prompt once; in tests, read from AXM_TEST_INPUT
+                            let action = scripted.as_deref().unwrap_or("");
+                            if action.is_empty() {
+                                let _ = writeln!(out, "Enter action (check/call/bet/raise/fold/q): ");
+                            }
+                        }
+                        Vs::Ai => {
+                            let _ = writeln!(out, "ai: check");
+                        }
+                    }
+                    played += 1;
+                }
+                let _ = writeln!(out, "Hands played: {} (completed)", played);
                 0
             }
             _ => 0,
