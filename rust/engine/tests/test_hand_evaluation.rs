@@ -69,11 +69,10 @@ fn pair_vs_high_card() {
         c(S::Clubs, R::Four), c(S::Diamonds, R::Five), c(S::Hearts, R::Seven),
     ];
     let high = [
-        c(S::Clubs, R::Ace), c(S::Hearts, R::King), c(S::Spades, R::Two), c(S::Diamonds, R::Three),
-        c(S::Clubs, R::Four), c(S::Diamonds, R::Five), c(S::Hearts, R::Seven),
+        c(S::Clubs, R::Ace), c(S::Hearts, R::King), c(S::Spades, R::Nine), c(S::Diamonds, R::Eight),
+        c(S::Clubs, R::Seven), c(S::Diamonds, R::Three), c(S::Hearts, R::Two),
     ];
     let a = evaluate_hand(&pair);
     let b = evaluate_hand(&high);
     assert!(compare_hands(&a, &b).is_gt());
 }
-
