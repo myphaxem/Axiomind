@@ -45,6 +45,7 @@ where
                 let hands = hands.unwrap_or(1);
                 let seed = seed.unwrap_or(0);
                 let level = level.unwrap_or(1);
+                if hands == 0 { let _ = ui::write_error(err, "hands must be >= 1"); return 2; }
                 let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands, seed);
                 let _ = writeln!(out, "Level: {}", level);
                 let mut eng = Engine::new(Some(seed), level);
@@ -85,16 +86,16 @@ where
             Commands::Stats { input } => {
                 match std::fs::read_to_string(&input) {
                     Ok(content) => {
-                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64;
+                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64; let mut invalid=false;
                         for line in content.lines().filter(|l| !l.trim().is_empty()) {
                             hands += 1;
-                            if let Ok(rec) = serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
-                                if let Some(r) = rec.result.as_deref() {
-                                    if r == "p0" { p0 += 1; }
-                                    if r == "p1" { p1 += 1; }
-                                }
+                            let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) { Ok(v)=>v, Err(_)=>{ invalid=true; break; } };
+                            if let Some(r) = rec.result.as_deref() {
+                                if r == "p0" { p0 += 1; }
+                                if r == "p1" { p1 += 1; }
                             }
                         }
+                        if invalid { let _=ui::write_error(err, "Invalid record encountered"); return 2; }
                         let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
                         let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
                         0
@@ -105,18 +106,22 @@ where
             Commands::Verify { input } => {
                 // verify basic rule: completed hands have 5 board cards
                 let mut ok = true; let mut hands = 0u64;
-                if let Some(path) = input {
-                    match std::fs::read_to_string(&path) {
-                        Ok(content) => {
-                            for line in content.lines().filter(|l| !l.trim().is_empty()) {
-                                hands += 1;
-                                if let Ok(rec) = serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
+                let Some(path) = input else { let _=ui::write_error(err, "input required"); return 2; };
+                let valid_id = |s: &str| -> bool { s.len()==15 && s[0..8].chars().all(|c| c.is_ascii_digit()) && &s[8..9]=="-" && s[9..].chars().all(|c| c.is_ascii_digit()) };
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        for line in content.lines().filter(|l| !l.trim().is_empty()) {
+                            hands += 1;
+                            match serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
+                                Ok(rec) => {
                                     if rec.board.len() != 5 { ok = false; }
-                                } else { ok = false; }
+                                    if !valid_id(&rec.hand_id) { ok = false; let _=ui::write_error(err, "Invalid hand_id"); }
+                                }
+                                Err(_) => { ok = false; let _=ui::write_error(err, "Invalid record"); }
                             }
                         }
-                        Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", path, e)); return 2; }
                     }
+                    Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", path, e)); return 2; }
                 }
                 let status = if ok { "OK" } else { "FAIL" };
                 let _ = writeln!(out, "Verify: {} (hands={})", status, hands);
@@ -172,6 +177,7 @@ where
             }
             Commands::Sim { hands, output, seed, resume } => {
                 let total: usize = hands as usize;
+                if total == 0 { let _=ui::write_error(err, "hands must be >= 1"); return 2; }
                 let mut completed = 0usize;
                 let mut path = None;
                 if let Some(outp) = output.clone() { path = Some(std::path::PathBuf::from(outp)); }
