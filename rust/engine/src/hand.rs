@@ -192,6 +192,12 @@ fn straight_high_from_mask(mask: u16) -> Option<u8> {
     None
 }
 
+pub fn evaluate_many_optimized(cards: &[Card;7], n: usize) -> Vec<HandStrength> {
+    let mut v = Vec::with_capacity(n);
+    for _ in 0..n { v.push(evaluate_hand_optimized(cards)); }
+    v
+}
+
 fn detect_quads(rank_counts: &[u8; 15]) -> Option<(u8, u8)> {
     let mut quad = 0u8; let mut kicker = 0u8;
     for r in (2..=14).rev() {
