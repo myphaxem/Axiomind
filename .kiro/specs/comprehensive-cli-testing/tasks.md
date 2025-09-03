@@ -13,7 +13,7 @@
   - Add methods for capturing exit codes, stdout, stderr, and execution timing
   - _Requirements: 1.1, 1.2, 1.3, 3.1, 3.2_
 
-- [ ] 2.2 Implement temporary file management utilities
+- [x] 2.2 Implement temporary file management utilities
   - Create TempFileManager for creating and cleaning up test files
   - Add methods for creating JSONL files, compressed files, and directories
   - Implement automatic cleanup on test completion

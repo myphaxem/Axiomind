@@ -18,8 +18,6 @@ impl TempFileManager {
         Ok(Self { base_dir: base })
     }
 
-    pub fn base_dir(&self) -> &Path { &self.base_dir }
-
     pub fn create_directory<P: AsRef<Path>>(&self, name: P) -> Result<PathBuf, String> {
         let p = self.base_dir.join(name);
         fs::create_dir_all(&p).map_err(|e| format!("create_dir_all: {}", e))?;
@@ -40,4 +38,3 @@ impl Drop for TempFileManager {
         let _ = fs::remove_dir_all(&self.base_dir);
     }
 }
-
