@@ -25,6 +25,10 @@ where
         let _ = writeln!(out, "\nOptions:\n  -h, --help     Show this help");
         return 0;
     }
+    if argv.iter().any(|a| a == "--version" || a == "-V") {
+        let _ = writeln!(out, "axm {}", env!("CARGO_PKG_VERSION"));
+        return 0;
+    }
 
     let parsed = AxmCli::try_parse_from(&argv);
     match parsed {
