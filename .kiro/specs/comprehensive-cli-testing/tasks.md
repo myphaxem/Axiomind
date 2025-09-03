@@ -7,7 +7,7 @@
   - _Requirements: All requirements depend on warning-free code_
 
 - [ ] 2. Create core test infrastructure and utilities
-- [ ] 2.1 Implement CLI test runner utility
+- [x] 2.1 Implement CLI test runner utility
   - Create rust/cli/tests/helpers/mod.rs with common test utilities
   - Implement CliRunner struct for executing CLI commands with controlled inputs/outputs
   - Add methods for capturing exit codes, stdout, stderr, and execution timing
