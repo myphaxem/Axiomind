@@ -3,7 +3,6 @@ use clap::{Parser, Subcommand, ValueEnum};
 mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
-use rand_chacha::ChaCha20Rng;
 use rand::{SeedableRng, RngCore, seq::SliceRandom};
 
 /// Runs the CLI with provided args, writing to the given writers.
@@ -255,7 +254,7 @@ where
                 lines.shuffle(&mut rng);
                 let n_tr = ((tr * n as f64).round() as usize).min(n);
                 let n_va = ((va * n as f64).round() as usize).min(n.saturating_sub(n_tr));
-                let n_te = n.saturating_sub(n_tr + n_va);
+                let _n_te = n.saturating_sub(n_tr + n_va);
                 let (trv, rest) = lines.split_at(n_tr);
                 let (vav, tev) = rest.split_at(n_va);
                 std::fs::create_dir_all(&outdir).unwrap();
@@ -265,7 +264,6 @@ where
                 w(&std::path::Path::new(&outdir).join("test.jsonl"), tev);
                 0
             }
-            _ => 0,
         }
     }
 }
