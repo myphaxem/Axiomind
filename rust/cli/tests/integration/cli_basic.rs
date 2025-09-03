@@ -17,6 +17,8 @@ fn a1_help_lists_all_commands() {
     for cmd in [
         "play", "replay", "sim", "eval", "stats", "verify",
         "deal", "bench", "rng", "cfg", "doctor", "export", "dataset",
+        // per requirements, help must also mention serve/train
+        "serve", "train",
     ] {
         assert!(out.contains(cmd), "help should list `{}`", cmd);
     }

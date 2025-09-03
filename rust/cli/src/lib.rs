@@ -20,6 +20,7 @@ where
         for c in [
             "play", "replay", "stats", "verify", "deal", "bench",
             "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
+            "serve", "train",
         ] { let _ = writeln!(out, "  {}", c); }
         let _ = writeln!(out, "\nOptions:\n  -h, --help     Show this help");
         return 0;
