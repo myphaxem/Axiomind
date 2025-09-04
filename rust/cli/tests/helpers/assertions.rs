@@ -12,7 +12,7 @@ pub trait PokerAssertions {
 #[derive(Debug, Default, Copy, Clone)]
 pub struct DefaultAsserter;
 
-fn commands_list() -> &'static [&'static str] {
+pub(crate) fn commands_list() -> &'static [&'static str] {
     &[
         "play","replay","sim","eval","stats","verify",
         "deal","bench","rng","cfg","doctor","export","dataset",
@@ -73,4 +73,3 @@ impl PokerAssertions for DefaultAsserter {
 }
 
 pub fn asserter() -> DefaultAsserter { DefaultAsserter }
-

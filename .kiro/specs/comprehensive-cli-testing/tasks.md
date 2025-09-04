@@ -20,6 +20,7 @@
   - _Requirements: 6.3, 6.4, 6.5, 6.6_
 
 - [ ] 2.3 Create poker-specific assertion helpers
+- [x] 2.3 Create poker-specific assertion helpers
   - Implement PokerAssertions trait with hand validation methods
   - Add chip conservation validation functions
   - Create deterministic output comparison utilities
