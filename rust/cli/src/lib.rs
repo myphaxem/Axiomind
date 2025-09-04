@@ -127,31 +127,55 @@ where
                 }
             }
             Commands::Stats { input } => {
-                match read_text_auto(&input) {
-                    Ok(content) => {
-                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64; let mut skipped = 0u64; let mut corrupted = 0u64;
-                        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-                        for (i, line) in lines.iter().enumerate() {
-                            let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) {
-                                Ok(v) => v,
-                                Err(_) => {
-                                    if i == lines.len() - 1 { skipped += 1; continue; } else { corrupted += 1; continue; }
-                                }
-                            };
-                            hands += 1;
-                            if let Some(r) = rec.result.as_deref() {
-                                if r == "p0" { p0 += 1; }
-                                if r == "p1" { p1 += 1; }
+                use std::path::Path;
+                let path = Path::new(&input);
+                let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64; let mut skipped = 0u64; let mut corrupted = 0u64;
+                let mut process_content = |content: String| {
+                    let has_trailing_nl = content.ends_with('\n');
+                    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+                    for (i, line) in lines.iter().enumerate() {
+                        let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                if i == lines.len() - 1 && !has_trailing_nl { skipped += 1; } else { corrupted += 1; }
+                                continue
+                            }
+                        };
+                        hands += 1;
+                        if let Some(r) = rec.result.as_deref() {
+                            if r == "p0" { p0 += 1; }
+                            if r == "p1" { p1 += 1; }
+                        }
+                    }
+                };
+
+                if path.is_dir() {
+                    let mut stack = vec![path.to_path_buf()];
+                    while let Some(d) = stack.pop() {
+                        let rd = match std::fs::read_dir(&d) { Ok(v) => v, Err(_) => continue };
+                        for entry in rd.flatten() {
+                            let p = entry.path();
+                            if p.is_dir() { stack.push(p); continue; }
+                            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                            if !(name.ends_with(".jsonl") || name.ends_with(".jsonl.zst")) { continue; }
+                            match read_text_auto(p.to_str().unwrap()) {
+                                Ok(s) => process_content(s),
+                                Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", p.display(), e)); }
                             }
                         }
-                        if corrupted > 0 { let _=ui::write_error(err, &format!("Skipped {} corrupted record(s)", corrupted)); }
-                        if skipped > 0 { let _=ui::write_error(err, &format!("Discarded {} incomplete final line(s)", skipped)); }
-                        let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
-                        let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
-                        0
                     }
-                    Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); 2 }
+                } else {
+                    match read_text_auto(&input) {
+                        Ok(s) => process_content(s),
+                        Err(e) => { let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e)); return 2; }
+                    }
                 }
+
+                if corrupted > 0 { let _=ui::write_error(err, &format!("Skipped {} corrupted record(s)", corrupted)); }
+                if skipped > 0 { let _=ui::write_error(err, &format!("Discarded {} incomplete final line(s)", skipped)); }
+                let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
+                let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
+                0
             }
             Commands::Verify { input } => {
                 // verify basic rule: completed hands have 5 board cards
