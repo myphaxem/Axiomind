@@ -17,19 +17,17 @@ where
         if let Some(s) = speed { if s <= 0.0 { return Err("speed must be > 0".into()); } }
         Ok(())
     }
-    fn commands_list() -> &'static [&'static str] {
-        &[
-            "play", "replay", "stats", "verify", "deal", "bench",
-            "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
-            "serve", "train",
-        ]
-    }
+    const COMMANDS: &[&str] = &[
+        "play", "replay", "stats", "verify", "deal", "bench",
+        "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
+        "serve", "train",
+    ];
     let argv: Vec<String> = args.into_iter().map(|s| s.as_ref().to_string()).collect();
     if argv.iter().any(|a| a == "--help" || a == "-h") {
         let _ = writeln!(out, "Axiomind Poker CLI\n");
         let _ = writeln!(out, "Usage: axm <command> [options]\n");
         let _ = writeln!(out, "Commands:");
-        for c in commands_list() { let _ = writeln!(out, "  {}", c); }
+        for c in COMMANDS { let _ = writeln!(out, "  {}", c); }
         let _ = writeln!(out, "\nOptions:\n  -h, --help     Show this help");
         return 0;
     }
@@ -48,7 +46,7 @@ where
             let _ = writeln!(err, "Axiomind Poker CLI");
             let _ = writeln!(err, "Usage: axm <command> [options]\n");
             let _ = writeln!(err, "Commands:");
-            for c in commands_list() { let _ = writeln!(err, "  {}", c); }
+            for c in COMMANDS { let _ = writeln!(err, "  {}", c); }
             let _ = writeln!(err, "\nFor full help, run: axm --help");
             2
         }
