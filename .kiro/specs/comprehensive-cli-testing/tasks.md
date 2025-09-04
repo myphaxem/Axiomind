@@ -67,7 +67,7 @@
   - Test TTY detection for --vs human mode
   - _Requirements: 6.1, 6.2, 3.3_
 
-- [ ] 5.2 Implement corrupted data recovery tests
+- [x] 5.2 Implement corrupted data recovery tests
   - Test incomplete JSONL line detection and recovery
   - Verify handling of non-UTF-8 and CRLF mixed content
   - Test compressed JSONL file support (*.jsonl.zst)
