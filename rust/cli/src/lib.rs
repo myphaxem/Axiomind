@@ -61,7 +61,7 @@ where
             }
             Commands::Play { vs, hands, seed, level } => {
                 let hands = hands.unwrap_or(1);
-                let seed = seed.unwrap_or(0);
+                let seed = seed.unwrap_or_else(|| rand::random());
                 let level = level.unwrap_or(1);
                 if matches!(vs, Vs::Human) && !std::io::stdin().is_terminal() {
                     let scripted = std::env::var("AXM_TEST_INPUT").ok();
@@ -190,7 +190,8 @@ where
                 0
             }
             Commands::Deal { seed } => {
-                let mut eng = Engine::new(seed, 1);
+                let base_seed = seed.unwrap_or_else(|| rand::random());
+                let mut eng = Engine::new(Some(base_seed), 1);
                 eng.shuffle(); let _ = eng.deal_hand();
                 let p = eng.players();
                 let hc1 = p[0].hole_cards(); let hc2 = p[1].hole_cards();
@@ -202,7 +203,8 @@ where
                 0
             }
             Commands::Rng { seed } => {
-                let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed.unwrap_or(0));
+                let s = seed.unwrap_or_else(|| rand::random());
+                let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(s);
                 let mut vals = vec![]; for _ in 0..5 { vals.push(rng.next_u64()); }
                 let _ = writeln!(out, "RNG sample: {:?}", vals);
                 0
@@ -231,11 +233,12 @@ where
                     if dups > 0 { let _ = writeln!(err, "Warning: {} duplicate hand_id(s) skipped", dups); }
                     let _=writeln!(out, "Resumed from {}", completed);
                 }
-                let mut eng = Engine::new(seed, 1); eng.shuffle();
+                let base_seed = seed.unwrap_or_else(|| rand::random());
+                let mut eng = Engine::new(Some(base_seed), 1); eng.shuffle();
                 let break_after = std::env::var("AXM_SIM_BREAK_AFTER").ok().and_then(|v| v.parse::<usize>().ok());
                 for i in completed..total {
                     // create a fresh engine per hand to avoid residual hole cards
-                    let mut e = Engine::new(seed.map(|s| s + i as u64), 1);
+                    let mut e = Engine::new(Some(base_seed + i as u64), 1);
                     e.shuffle();
                     let _ = e.deal_hand();
                     if let Some(p) = &path {
