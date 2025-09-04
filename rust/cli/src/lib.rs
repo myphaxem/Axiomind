@@ -64,8 +64,11 @@ where
                 let seed = seed.unwrap_or(0);
                 let level = level.unwrap_or(1);
                 if matches!(vs, Vs::Human) && !std::io::stdin().is_terminal() {
-                    let _ = ui::write_error(err, "Non-TTY environment: --vs human is not allowed");
-                    return 2;
+                    let scripted = std::env::var("AXM_TEST_INPUT").ok();
+                    if scripted.is_none() {
+                        let _ = ui::write_error(err, "Non-TTY environment: --vs human is not allowed");
+                        return 2;
+                    }
                 }
                 if hands == 0 { let _ = ui::write_error(err, "hands must be >= 1"); return 2; }
                 let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands, seed);
@@ -210,8 +213,24 @@ where
                 let mut completed = 0usize;
                 let mut path = None;
                 if let Some(outp) = output.clone() { path = Some(std::path::PathBuf::from(outp)); }
-                // resume: count existing lines
-                if let Some(res) = resume.clone() { let contents = std::fs::read_to_string(&res).unwrap_or_default(); completed = contents.lines().filter(|l| !l.trim().is_empty()).count(); path = Some(std::path::PathBuf::from(res)); let _=writeln!(out, "Resumed from {}", completed); }
+                // resume: count existing unique hand_ids and warn on duplicates
+                if let Some(res) = resume.clone() {
+                    let contents = std::fs::read_to_string(&res).unwrap_or_default();
+                    let mut seen = std::collections::HashSet::new();
+                    let mut dups = 0usize;
+                    for line in contents.lines().filter(|l| !l.trim().is_empty()) {
+                        let hid = serde_json::from_str::<serde_json::Value>(line)
+                            .ok()
+                            .and_then(|v| v.get("hand_id").and_then(|x| x.as_str()).map(|s| s.to_string()))
+                            .unwrap_or_default();
+                        if hid.is_empty() { continue; }
+                        if !seen.insert(hid) { dups += 1; }
+                    }
+                    completed = seen.len();
+                    path = Some(std::path::PathBuf::from(res));
+                    if dups > 0 { let _ = writeln!(err, "Warning: {} duplicate hand_id(s) skipped", dups); }
+                    let _=writeln!(out, "Resumed from {}", completed);
+                }
                 let mut eng = Engine::new(seed, 1); eng.shuffle();
                 let break_after = std::env::var("AXM_SIM_BREAK_AFTER").ok().and_then(|v| v.parse::<usize>().ok());
                 for i in completed..total {
