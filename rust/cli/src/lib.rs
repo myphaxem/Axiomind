@@ -1,5 +1,6 @@
 use std::io::Write;
 use clap::{Parser, Subcommand, ValueEnum};
+use std::io::IsTerminal;
 mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
@@ -58,6 +59,10 @@ where
                 let hands = hands.unwrap_or(1);
                 let seed = seed.unwrap_or(0);
                 let level = level.unwrap_or(1);
+                if matches!(vs, Vs::Human) && !std::io::stdin().is_terminal() {
+                    let _ = ui::write_error(err, "Non-TTY environment: --vs human is not allowed");
+                    return 2;
+                }
                 if hands == 0 { let _ = ui::write_error(err, "hands must be >= 1"); return 2; }
                 let _ = writeln!(out, "play: vs={} hands={} seed={}", vs.as_str(), hands, seed);
                 let _ = writeln!(out, "Level: {}", level);
@@ -91,9 +96,10 @@ where
                 let _ = writeln!(out, "Hands played: {} (completed)", played);
                 0
             }
-            Commands::Replay { input } => {
+            Commands::Replay { input, speed } => {
                 match std::fs::read_to_string(&input) {
                     Ok(content) => {
+                        if let Some(s) = speed { if s <= 0.0 { let _=ui::write_error(err, "speed must be > 0"); return 2; } }
                         let count = content.lines().filter(|l| !l.trim().is_empty()).count();
                         let _ = writeln!(out, "Replayed: {} hands", count);
                         0
@@ -288,7 +294,7 @@ struct AxmCli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64>, #[arg(long)] level: Option<u8> },
-    Replay { #[arg(long)] input: String },
+    Replay { #[arg(long)] input: String, #[arg(long)] speed: Option<f64> },
     Stats { #[arg(long)] input: String },
     Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64> },
     Verify { #[arg(long)] input: Option<String> },
