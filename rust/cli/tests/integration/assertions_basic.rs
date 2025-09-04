@@ -1,6 +1,7 @@
 // 2.3: Poker-specific assertion helpers (Red)
 
 use crate::helpers::assertions;
+use crate::helpers::assertions::PokerAssertions;
 use crate::helpers::cli_runner::CliRunner;
 
 #[test]
@@ -31,4 +32,3 @@ fn assertions_deterministic_output() {
     let a = assertions::asserter();
     a.assert_deterministic_output(42, "OUTPUT", "OUTPUT");
 }
-

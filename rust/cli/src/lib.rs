@@ -214,8 +214,8 @@ where
                 let mut path = None;
                 if let Some(outp) = output.clone() { path = Some(std::path::PathBuf::from(outp)); }
                 // resume: count existing unique hand_ids and warn on duplicates
-                if let Some(res) = resume.clone() {
-                    let contents = std::fs::read_to_string(&res).unwrap_or_default();
+                if let Some(res) = resume.as_ref() {
+                    let contents = std::fs::read_to_string(res).unwrap_or_default();
                     let mut seen = std::collections::HashSet::new();
                     let mut dups = 0usize;
                     for line in contents.lines().filter(|l| !l.trim().is_empty()) {

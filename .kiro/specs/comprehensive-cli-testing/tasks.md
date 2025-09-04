@@ -79,6 +79,7 @@
 
 - [ ] 6. Implement simulation and evaluation tests (D-E series)
 - [ ] 6.1 Create simulation parameter validation tests
+- [x] 6.1 Create simulation parameter validation tests
   - Test --hands parameter requirement and validation (reject N=0, handle large values)
   - Implement resume functionality testing with duplicate hand_id detection
   - Verify batched write performance for SQLite/JSONL output
