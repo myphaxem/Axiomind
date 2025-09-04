@@ -28,11 +28,12 @@ fn cfg_shows_default_settings() {
 
 #[test]
 fn play_parses_args() {
+    // In non-TTY test environment, use AI opponent to validate arg parsing
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
-    let _code = run(["axm", "play", "--vs", "human", "--hands", "3", "--seed", "42"], &mut out, &mut err);
+    let _code = run(["axm", "play", "--vs", "ai", "--hands", "3", "--seed", "42"], &mut out, &mut err);
     let stdout = String::from_utf8_lossy(&out);
-    assert!(stdout.contains("play: vs=human hands=3 seed=42"));
+    assert!(stdout.contains("play: vs=ai hands=3 seed=42"));
 }
 
 #[test]
