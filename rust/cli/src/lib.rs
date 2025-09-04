@@ -5,6 +5,8 @@ mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
 use rand::{SeedableRng, RngCore, seq::SliceRandom};
+use std::fs::File;
+use std::io::Read;
 
 /// Runs the CLI with provided args, writing to the given writers.
 /// Returns the intended process exit code.
@@ -13,6 +15,17 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    fn read_text_auto(path: &str) -> Result<String, String> {
+        if path.ends_with(".zst") {
+            let f = File::open(path).map_err(|e| e.to_string())?;
+            let mut dec = zstd::stream::read::Decoder::new(f).map_err(|e| e.to_string())?;
+            let mut buf = Vec::new();
+            dec.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+            String::from_utf8(buf).map_err(|e| e.to_string())
+        } else {
+            std::fs::read_to_string(path).map_err(|e| e.to_string())
+        }
+    }
     fn validate_speed(speed: Option<f64>) -> Result<(), String> {
         if let Some(s) = speed { if s <= 0.0 { return Err("speed must be > 0".into()); } }
         Ok(())
@@ -102,7 +115,7 @@ where
                 0
             }
             Commands::Replay { input, speed } => {
-                match std::fs::read_to_string(&input) {
+                match read_text_auto(&input) {
                     Ok(content) => {
                         // Validate speed via helper for clarity and future reuse
                         if let Err(msg) = validate_speed(speed) { let _=ui::write_error(err, &msg); return 2; }
@@ -114,18 +127,25 @@ where
                 }
             }
             Commands::Stats { input } => {
-                match std::fs::read_to_string(&input) {
+                match read_text_auto(&input) {
                     Ok(content) => {
-                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64; let mut invalid=false;
-                        for line in content.lines().filter(|l| !l.trim().is_empty()) {
+                        let mut hands = 0u64; let mut p0 = 0u64; let mut p1 = 0u64; let mut skipped = 0u64; let mut corrupted = 0u64;
+                        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+                        for (i, line) in lines.iter().enumerate() {
+                            let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    if i == lines.len() - 1 { skipped += 1; continue; } else { corrupted += 1; continue; }
+                                }
+                            };
                             hands += 1;
-                            let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) { Ok(v)=>v, Err(_)=>{ invalid=true; break; } };
                             if let Some(r) = rec.result.as_deref() {
                                 if r == "p0" { p0 += 1; }
                                 if r == "p1" { p1 += 1; }
                             }
                         }
-                        if invalid { let _=ui::write_error(err, "Invalid record encountered"); return 2; }
+                        if corrupted > 0 { let _=ui::write_error(err, &format!("Skipped {} corrupted record(s)", corrupted)); }
+                        if skipped > 0 { let _=ui::write_error(err, &format!("Discarded {} incomplete final line(s)", skipped)); }
                         let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
                         let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
                         0
