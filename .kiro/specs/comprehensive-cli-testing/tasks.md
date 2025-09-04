@@ -74,6 +74,7 @@
   - _Requirements: 6.3, 6.4, 6.5_
 
 - [ ] 5.3 Create directory and file processing tests
+- [x] 5.3 Create directory and file processing tests
   - Test recursive directory scanning for JSONL files
   - Verify corrupted record skipping with warning reports
   - _Requirements: 6.6, 6.7_
