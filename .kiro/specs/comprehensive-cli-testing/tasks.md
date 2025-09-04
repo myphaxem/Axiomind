@@ -60,6 +60,7 @@
 
 - [ ] 5. Implement file I/O and data handling tests (C-series)
 - [ ] 5.1 Create input validation and error handling tests
+- [x] 5.1 Create input validation and error handling tests
   - Test --input requirement for replay command
   - Verify --speed range validation (reject 0 and negative values)
   - Test TTY detection for --vs human mode

@@ -13,6 +13,10 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    fn validate_speed(speed: Option<f64>) -> Result<(), String> {
+        if let Some(s) = speed { if s <= 0.0 { return Err("speed must be > 0".into()); } }
+        Ok(())
+    }
     fn commands_list() -> &'static [&'static str] {
         &[
             "play", "replay", "stats", "verify", "deal", "bench",
@@ -99,7 +103,8 @@ where
             Commands::Replay { input, speed } => {
                 match std::fs::read_to_string(&input) {
                     Ok(content) => {
-                        if let Some(s) = speed { if s <= 0.0 { let _=ui::write_error(err, "speed must be > 0"); return 2; } }
+                        // Validate speed via helper for clarity and future reuse
+                        if let Err(msg) = validate_speed(speed) { let _=ui::write_error(err, &msg); return 2; }
                         let count = content.lines().filter(|l| !l.trim().is_empty()).count();
                         let _ = writeln!(out, "Replayed: {} hands", count);
                         0
