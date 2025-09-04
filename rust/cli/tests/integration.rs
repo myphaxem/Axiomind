@@ -7,4 +7,5 @@ mod integration { // groups files under tests/integration/
     mod assertions_basic; // rust/cli/tests/integration/assertions_basic.rs (2.3)
     mod file_io_basic; // rust/cli/tests/integration/file_io_basic.rs (5.1)
     mod simulation_basic; // rust/cli/tests/integration/simulation_basic.rs (6.1)
+    mod config_precedence; // rust/cli/tests/integration/config_precedence.rs (3.2)
 }
