@@ -33,9 +33,19 @@ where
     let parsed = AxmCli::try_parse_from(&argv);
     match parsed {
         Err(e) => {
-            let _ = writeln!(out, "Axiomind Poker CLI");
-            let _ = writeln!(out, "Use --help for usage.");
+            // Print clap error first
             let _ = writeln!(err, "{}", e);
+            // Then print an explicit help excerpt including the Commands list to stderr
+            let _ = writeln!(err, "");
+            let _ = writeln!(err, "Axiomind Poker CLI");
+            let _ = writeln!(err, "Usage: axm <command> [options]\n");
+            let _ = writeln!(err, "Commands:");
+            for c in [
+                "play", "replay", "stats", "verify", "deal", "bench",
+                "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
+                "serve", "train",
+            ] { let _ = writeln!(err, "  {}", c); }
+            let _ = writeln!(err, "\nFor full help, run: axm --help");
             2
         }
         Ok(cli) => match cli.cmd {
