@@ -22,6 +22,7 @@ impl Engine {
     }
 
     pub fn players(&self) -> &[Player; 2] { &self.players }
+    pub fn players_mut(&mut self) -> &mut [Player; 2] { &mut self.players }
 
     pub fn shuffle(&mut self) { self.deck.shuffle(); }
 
@@ -30,6 +31,10 @@ impl Engine {
     }
 
     pub fn deal_hand(&mut self) -> Result<(), String> {
+        // refuse to start a hand if any player's stack is zero
+        if self.players.iter().any(|p| p.stack() == 0) {
+            return Err("Player stack zero".to_string());
+        }
         self.board.clear();
         // preflop: 2 cards each
         for _ in 0..2 {
