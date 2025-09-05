@@ -56,4 +56,6 @@ impl Engine {
     pub fn board(&self) -> &Vec<Card> { &self.board }
 
     pub fn is_hand_complete(&self) -> bool { self.board.len() == 5 }
+
+    pub fn deck_remaining(&self) -> usize { self.deck.remaining() }
 }
