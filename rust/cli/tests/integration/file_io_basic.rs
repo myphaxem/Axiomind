@@ -25,9 +25,10 @@ fn c2_replay_speed_validation() {
 #[test]
 fn c3_play_vs_human_requires_tty() {
     let cli = CliRunner::new().expect("CliRunner init");
+    // ensure scripted input flag does not bypass TTY check
+    std::env::remove_var("AXM_TEST_INPUT");
     let res = cli.run(&["play", "--vs", "human", "--hands", "1"]);
     assert_ne!(res.exit_code, 0);
     let err = res.stderr.to_lowercase();
     assert!(err.contains("tty") || err.contains("refuse"), "stderr should warn about non-tty: {}", res.stderr);
 }
-
