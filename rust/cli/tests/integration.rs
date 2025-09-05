@@ -10,4 +10,5 @@ mod integration { // groups files under tests/integration/
     mod config_precedence; // rust/cli/tests/integration/config_precedence.rs (3.2)
     mod file_corruption_recovery; // rust/cli/tests/integration/file_corruption_recovery.rs (5.2)
     mod file_dir_processing; // rust/cli/tests/integration/file_dir_processing.rs (5.3)
+    mod evaluation_basic; // rust/cli/tests/integration/evaluation_basic.rs (6.2)
 }
