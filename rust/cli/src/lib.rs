@@ -17,11 +17,11 @@ where
 {
     fn read_text_auto(path: &str) -> Result<String, String> {
         if path.ends_with(".zst") {
-            let f = File::open(path).map_err(|e| e.to_string())?;
-            let mut dec = zstd::stream::read::Decoder::new(f).map_err(|e| e.to_string())?;
-            let mut buf = Vec::new();
-            dec.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-            String::from_utf8(buf).map_err(|e| e.to_string())
+            // Read entire compressed file then decompress; more portable across platforms
+            let comp = std::fs::read(path).map_err(|e| e.to_string())?;
+            // Use a conservative initial capacity; zstd will grow as needed
+            let dec = zstd::bulk::decompress(&comp, 8 * 1024 * 1024).map_err(|e| e.to_string())?;
+            String::from_utf8(dec).map_err(|e| e.to_string())
         } else {
             std::fs::read_to_string(path).map_err(|e| e.to_string())
         }
@@ -74,7 +74,11 @@ where
                 let hands = hands.unwrap_or(1);
                 let seed = seed.unwrap_or_else(|| rand::random());
                 let level = level.unwrap_or(1);
-                if matches!(vs, Vs::Human) && !std::io::stdin().is_terminal() {
+                let non_tty_override = std::env::var("AXM_NON_TTY").ok().map(|v| {
+                    let v = v.to_ascii_lowercase();
+                    v == "1" || v == "true" || v == "yes" || v == "on"
+                }).unwrap_or(false);
+                if matches!(vs, Vs::Human) && (!std::io::stdin().is_terminal() || non_tty_override) {
                     let scripted = std::env::var("AXM_TEST_INPUT").ok();
                     if scripted.is_none() {
                         let _ = ui::write_error(err, "Non-TTY environment: --vs human is not allowed");
@@ -173,6 +177,10 @@ where
 
                 if corrupted > 0 { let _=ui::write_error(err, &format!("Skipped {} corrupted record(s)", corrupted)); }
                 if skipped > 0 { let _=ui::write_error(err, &format!("Discarded {} incomplete final line(s)", skipped)); }
+                if !path.is_dir() && hands == 0 && (corrupted > 0 || skipped > 0) {
+                    let _ = ui::write_error(err, "Invalid record");
+                    return 2;
+                }
                 let summary = serde_json::json!({"hands": hands, "winners": {"p0": p0, "p1": p1}});
                 let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
                 0

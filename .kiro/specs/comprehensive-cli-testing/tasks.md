@@ -88,6 +88,7 @@
   - _Requirements: 7.1, 7.2, 7.3_
 
 - [ ] 6.2 Implement evaluation requirement tests
+- [x] 6.2 Implement evaluation requirement tests
   - Test required parameters: --ai-a, --ai-b, --hands for evaluation
   - Verify identical AI model warnings
   - Test deterministic evaluation results with seeds

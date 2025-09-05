@@ -27,6 +27,8 @@ fn c3_play_vs_human_requires_tty() {
     let cli = CliRunner::new().expect("CliRunner init");
     // ensure scripted input flag does not bypass TTY check
     std::env::remove_var("AXM_TEST_INPUT");
+    // force non-tty for deterministic behavior across environments
+    std::env::set_var("AXM_NON_TTY", "1");
     let res = cli.run(&["play", "--vs", "human", "--hands", "1"]);
     assert_ne!(res.exit_code, 0);
     let err = res.stderr.to_lowercase();
