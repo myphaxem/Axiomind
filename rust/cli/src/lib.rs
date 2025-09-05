@@ -205,10 +205,12 @@ where
                 let _ = writeln!(out, "Doctor: OK");
                 0
             }
-            Commands::Eval { ai_a: _, ai_b: _, hands, seed: _ } => {
-                let hands = hands.unwrap_or(10);
+            Commands::Eval { ai_a, ai_b, hands, seed } => {
+                if ai_a == ai_b { let _ = ui::write_error(err, "Warning: identical AI models"); }
                 let mut a_wins = 0u32; let mut b_wins = 0u32;
-                for i in 0..hands { if (i % 2) == 0 { a_wins+=1; } else { b_wins+=1; } }
+                let s = seed.unwrap_or_else(|| rand::random());
+                let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(s);
+                for _ in 0..hands { if (rng.next_u32() & 1) == 0 { a_wins+=1; } else { b_wins+=1; } }
                 let _ = writeln!(out, "Eval: hands={} A:{} B:{}", hands, a_wins, b_wins);
                 0
             }
@@ -365,7 +367,7 @@ enum Commands {
     Play { #[arg(long, value_enum)] vs: Vs, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64>, #[arg(long)] level: Option<u8> },
     Replay { #[arg(long)] input: String, #[arg(long)] speed: Option<f64> },
     Stats { #[arg(long)] input: String },
-    Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String, #[arg(long)] hands: Option<u32>, #[arg(long)] seed: Option<u64> },
+    Eval { #[arg(long, name="ai-a")] ai_a: String, #[arg(long, name="ai-b")] ai_b: String, #[arg(long)] hands: u32, #[arg(long)] seed: Option<u64> },
     Verify { #[arg(long)] input: Option<String> },
     Deal { #[arg(long)] seed: Option<u64> },
     Bench,
