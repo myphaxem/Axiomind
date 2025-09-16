@@ -188,3 +188,35 @@ fn b4_verify_rejects_under_minimum_raise_delta() {
     assert_ne!(res.exit_code, 0, "verify should fail on short raise");
     assert!(res.stderr.to_lowercase().contains("raise"), "stderr: {}", res.stderr);
 }
+#[test]
+fn b5_verify_flags_raise_after_short_all_in() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000001",
+        "seed": 1,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 250}
+        ],
+        "actions": [
+            {"player_id": 0, "street": "Preflop", "action": {"Bet": 200}},
+            {"player_id": 1, "street": "Preflop", "action": "AllIn"},
+            {"player_id": 0, "street": "Preflop", "action": {"Raise": 200}}
+        ],
+        "board": standard_board(),
+        "result": "p0",
+        "showdown": null,
+        "net_result": {"p0": 250, "p1": -250},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:05:00Z"
+    });
+    let path = write_records(&tfm, "reopen_after_allin.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(res.exit_code, 0, "verify should fail when betting reopens after short all-in");
+    assert!(res.stderr.to_lowercase().contains("all-in") || res.stderr.to_lowercase().contains("raise"), "stderr: {}", res.stderr);
+}
