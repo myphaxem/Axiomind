@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::collections::HashMap;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::IsTerminal;
 mod config;
@@ -188,13 +189,57 @@ where
             Commands::Verify { input } => {
                 // verify basic rule: completed hands have 5 board cards
                 let mut ok = true; let mut hands = 0u64;
+                let mut game_over = false;
+                let mut stacks_after_hand: HashMap<String, i64> = HashMap::new();
                 let Some(path) = input else { let _=ui::write_error(err, "input required"); return 2; };
                 let valid_id = |s: &str| -> bool { s.len()==15 && s[0..8].chars().all(|c| c.is_ascii_digit()) && &s[8..9]=="-" && s[9..].chars().all(|c| c.is_ascii_digit()) };
-                match std::fs::read_to_string(&path) {
+                match read_text_auto(&path) {
                     Ok(content) => {
                         for line in content.lines().filter(|l| !l.trim().is_empty()) {
                             hands += 1;
-                            match serde_json::from_str::<axm_engine::logger::HandRecord>(line) {
+                            if game_over {
+                                ok = false;
+                                let _ = ui::write_error(err, &format!("Hand {} recorded after player elimination", hands));
+                            }
+                            // parse as Value first to validate optional net_result chip conservation
+                            let v: serde_json::Value = match serde_json::from_str(line) { Ok(v)=>v, Err(_)=>{ ok=false; let _=ui::write_error(err, "Invalid record"); continue } };
+                            if let Some(players) = v.get("players").and_then(|p| p.as_array()) {
+                                let mut start = HashMap::new();
+                                for player in players {
+                                    let Some(id) = player.get("id").and_then(|x| x.as_str()) else { continue };
+                                    let stack = player.get("stack_start").and_then(|x| x.as_i64()).unwrap_or(0);
+                                    start.insert(id.to_string(), stack);
+                                }
+                                if !stacks_after_hand.is_empty() {
+                                    for (id, stack_start) in &start {
+                                        if let Some(prev) = stacks_after_hand.get(id) {
+                                            if *prev != *stack_start {
+                                                ok = false;
+                                                let _ = ui::write_error(err, &format!("Stack mismatch for {} at hand {}", id, hands));
+                                            }
+                                        }
+                                        if *stack_start <= 0 {
+                                            ok = false;
+                                            let _ = ui::write_error(err, &format!("Player {} has non-positive starting stack at hand {}", id, hands));
+                                        }
+                                    }
+                                }
+                                stacks_after_hand = start;
+                            }
+                            if let Some(nr) = v.get("net_result").and_then(|x| x.as_object()) {
+                                let mut sum: i64 = 0; for val in nr.values() { if let Some(n) = val.as_i64() { sum += n; } }
+                                if sum != 0 { ok=false; let _=ui::write_error(err, "Chip conservation violated"); }
+                                for (id, delta) in nr.iter() {
+                                    if let Some(val) = delta.as_i64() {
+                                        let entry = stacks_after_hand.entry(id.clone()).or_insert(0);
+                                        *entry += val;
+                                    }
+                                }
+                                if stacks_after_hand.values().any(|stack| *stack <= 0) {
+                                    game_over = true;
+                                }
+                            }
+                            match serde_json::from_value::<axm_engine::logger::HandRecord>(v) {
                                 Ok(rec) => {
                                     if rec.board.len() != 5 { ok = false; }
                                     if !valid_id(&rec.hand_id) { ok = false; let _=ui::write_error(err, "Invalid hand_id"); }
