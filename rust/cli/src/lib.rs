@@ -191,6 +191,7 @@ where
                 let mut ok = true; let mut hands = 0u64;
                 let mut game_over = false;
                 let mut stacks_after_hand: HashMap<String, i64> = HashMap::new();
+                const MIN_CHIP_UNIT: i64 = 25;
                 let Some(path) = input else { let _=ui::write_error(err, "input required"); return 2; };
                 let valid_id = |s: &str| -> bool { s.len()==15 && s[0..8].chars().all(|c| c.is_ascii_digit()) && &s[8..9]=="-" && s[9..].chars().all(|c| c.is_ascii_digit()) };
                 match read_text_auto(&path) {
@@ -225,6 +226,37 @@ where
                                     }
                                 }
                                 stacks_after_hand = start;
+                            }
+                            if let Some(actions) = v.get("actions").and_then(|a| a.as_array()) {
+                                for (idx, act) in actions.iter().enumerate() {
+                                    if let Some(action_val) = act.get("action") {
+                                        match action_val {
+                                            serde_json::Value::Object(map) => {
+                                                if let Some(amount_val) = map.get("Bet").or_else(|| map.get("Raise")) {
+                                                    if let Some(amount) = amount_val.as_i64() {
+                                                        if amount % MIN_CHIP_UNIT != 0 {
+                                                            ok = false;
+                                                            let _ = ui::write_error(err, &format!(
+                                                                "Invalid bet amount {} at hand {} (action #{})",
+                                                                amount, hands, idx + 1
+                                                            ));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            serde_json::Value::String(name) => {
+                                                if name.eq_ignore_ascii_case("bet") || name.eq_ignore_ascii_case("raise") {
+                                                    ok = false;
+                                                    let _ = ui::write_error(err, &format!(
+                                                        "Bet action missing amount at hand {} (action #{})",
+                                                        hands, idx + 1
+                                                    ));
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
                             }
                             if let Some(nr) = v.get("net_result").and_then(|x| x.as_object()) {
                                 let mut sum: i64 = 0; for val in nr.values() { if let Some(n) = val.as_i64() { sum += n; } }
