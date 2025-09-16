@@ -157,3 +157,34 @@ fn b3_verify_rejects_invalid_chip_unit_bet() {
     assert_ne!(res.exit_code, 0, "verify should fail on invalid bet size");
     assert!(res.stderr.to_lowercase().contains("bet"), "stderr: {}", res.stderr);
 }
+#[test]
+fn b4_verify_rejects_under_minimum_raise_delta() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000001",
+        "seed": 1,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [
+            {"player_id": 0, "street": "Preflop", "action": {"Bet": 100}},
+            {"player_id": 1, "street": "Preflop", "action": {"Raise": 50}}
+        ],
+        "board": standard_board(),
+        "result": "p1",
+        "showdown": null,
+        "net_result": {"p0": -100, "p1": 100},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:00:00Z"
+    });
+    let path = write_records(&tfm, "invalid_raise.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(res.exit_code, 0, "verify should fail on short raise");
+    assert!(res.stderr.to_lowercase().contains("raise"), "stderr: {}", res.stderr);
+}
