@@ -187,7 +187,7 @@ where
                 0
             }
             Commands::Verify { input } => {
-                // verify basic rule: completed hands have 5 board cards
+                // verify basic rule set covering board completion, chip conservation, and betting rules
                 let mut ok = true; let mut hands = 0u64;
                 let mut game_over = false;
                 let mut stacks_after_hand: HashMap<String, i64> = HashMap::new();
@@ -227,12 +227,33 @@ where
                                 }
                                 stacks_after_hand = start;
                             }
+                            let mut big_blind = MIN_CHIP_UNIT;
+                            if let Some(blinds_val) = v.get("blinds") {
+                                if let Some(bb) = blinds_val.get("bb").and_then(|x| x.as_i64()) {
+                                    big_blind = bb;
+                                } else if let Some(arr) = blinds_val.as_array() {
+                                    if arr.len() >= 2 {
+                                        if let Some(bb) = arr[1].as_i64() { big_blind = bb; }
+                                    }
+                                }
+                            }
+                            if big_blind < MIN_CHIP_UNIT { big_blind = MIN_CHIP_UNIT; }
                             if let Some(actions) = v.get("actions").and_then(|a| a.as_array()) {
+                                let mut prev_street: Option<String> = None;
+                                let mut current_bet: i64 = 0;
+                                let mut last_raise_delta: i64 = big_blind;
                                 for (idx, act) in actions.iter().enumerate() {
+                                    if let Some(street) = act.get("street").and_then(|s| s.as_str()) {
+                                        if prev_street.as_deref() != Some(street) {
+                                            prev_street = Some(street.to_string());
+                                            current_bet = 0;
+                                            last_raise_delta = big_blind;
+                                        }
+                                    }
                                     if let Some(action_val) = act.get("action") {
                                         match action_val {
                                             serde_json::Value::Object(map) => {
-                                                if let Some(amount_val) = map.get("Bet").or_else(|| map.get("Raise")) {
+                                                if let Some(amount_val) = map.get("Bet") {
                                                     if let Some(amount) = amount_val.as_i64() {
                                                         if amount % MIN_CHIP_UNIT != 0 {
                                                             ok = false;
@@ -241,6 +262,50 @@ where
                                                                 amount, hands, idx + 1
                                                             ));
                                                         }
+                                                        let min_bet = big_blind.max(MIN_CHIP_UNIT);
+                                                        if amount < min_bet {
+                                                            ok = false;
+                                                            let _ = ui::write_error(err, &format!(
+                                                                "Bet below minimum {} at hand {} (action #{})",
+                                                                min_bet, hands, idx + 1
+                                                            ));
+                                                        }
+                                                        current_bet = amount;
+                                                        last_raise_delta = amount.max(min_bet);
+                                                    }
+                                                }
+                                                if let Some(amount_val) = map.get("Raise") {
+                                                    if let Some(amount) = amount_val.as_i64() {
+                                                        if amount % MIN_CHIP_UNIT != 0 {
+                                                            ok = false;
+                                                            let _ = ui::write_error(err, &format!(
+                                                                "Invalid raise amount {} at hand {} (action #{})",
+                                                                amount, hands, idx + 1
+                                                            ));
+                                                        }
+                                                        let min_delta = last_raise_delta.max(big_blind).max(MIN_CHIP_UNIT);
+                                                        if amount < min_delta {
+                                                            ok = false;
+                                                            let _ = ui::write_error(err, &format!(
+                                                                "Raise delta {} below minimum {} at hand {} (action #{})",
+                                                                amount, min_delta, hands, idx + 1
+                                                            ));
+                                                        } else {
+                                                            current_bet += amount;
+                                                            last_raise_delta = amount;
+                                                        }
+                                                    }
+                                                }
+                                                if let Some(amount_val) = map.get("AllIn") {
+                                                    if let Some(amount) = amount_val.as_i64() {
+                                                        if amount % MIN_CHIP_UNIT != 0 {
+                                                            ok = false;
+                                                            let _ = ui::write_error(err, &format!(
+                                                                "Invalid all-in amount {} at hand {} (action #{})",
+                                                                amount, hands, idx + 1
+                                                            ));
+                                                        }
+                                                        current_bet += amount;
                                                     }
                                                 }
                                             }
