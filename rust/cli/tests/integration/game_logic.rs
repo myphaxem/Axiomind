@@ -127,3 +127,33 @@ fn b2_verify_chip_conservation_fails_when_sum_nonzero() {
     assert_ne!(res.exit_code, 0);
     assert!(res.stderr.to_lowercase().contains("chip"), "stderr: {}", res.stderr);
 }
+#[test]
+fn b3_verify_rejects_invalid_chip_unit_bet() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000001",
+        "seed": 1,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 100},
+            {"id": "p1", "stack_start": 100}
+        ],
+        "actions": [
+            {"player_id": 0, "street": "Preflop", "action": {"Bet": 30}}
+        ],
+        "board": standard_board(),
+        "result": "p0",
+        "showdown": null,
+        "net_result": {"p0": 50, "p1": -50},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:00:00Z"
+    });
+    let path = write_records(&tfm, "invalid_bet.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(res.exit_code, 0, "verify should fail on invalid bet size");
+    assert!(res.stderr.to_lowercase().contains("bet"), "stderr: {}", res.stderr);
+}
