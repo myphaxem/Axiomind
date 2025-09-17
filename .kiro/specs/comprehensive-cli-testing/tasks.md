@@ -19,7 +19,6 @@
   - Implement automatic cleanup on test completion
   - _Requirements: 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 2.3 Create poker-specific assertion helpers
 - [x] 2.3 Create poker-specific assertion helpers
   - Implement PokerAssertions trait with hand validation methods
   - Add chip conservation validation functions
@@ -27,14 +26,12 @@
   - _Requirements: 4.2, 5.1, 5.2, 8.1_
 
 - [ ] 3. Implement basic CLI functionality tests (A-series)
-- [ ] 3.1 Create basic CLI command tests
 - [x] 3.1 Create basic CLI command tests
   - Write tests for axm --version and axm --help with exit code validation
   - Verify help text contains all required commands (play/replay/sim/eval/stats/verify/deal/bench/rng/cfg/doctor/export/dataset/serve/train)
   - Test unknown subcommand handling with proper error messages
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 3.2 Implement configuration and default value tests
 - [x] 3.2 Implement configuration and default value tests
   - Test default values for --seed (non-deterministic), --adaptive (on), --ai-version (latest)
   - Verify configuration precedence: CLI > environment > config file > defaults
@@ -48,7 +45,7 @@
   - Test invalid bet amount handling with minimum chip unit validation
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 4.2 Implement betting rule validation tests
+- [x] 4.2 Implement betting rule validation tests
   - Test minimum raise delta enforcement
   - Verify all-in scenarios don't reopen betting inappropriately
   - Test BTN/BB dealing order and burn card placement
@@ -60,7 +57,6 @@
   - _Requirements: 5.1, 5.2_
 
 - [ ] 5. Implement file I/O and data handling tests (C-series)
-- [ ] 5.1 Create input validation and error handling tests
 - [x] 5.1 Create input validation and error handling tests
   - Test --input requirement for replay command
   - Verify --speed range validation (reject 0 and negative values)
@@ -73,21 +69,18 @@
   - Test compressed JSONL file support (*.jsonl.zst)
   - _Requirements: 6.3, 6.4, 6.5_
 
-- [ ] 5.3 Create directory and file processing tests
 - [x] 5.3 Create directory and file processing tests
   - Test recursive directory scanning for JSONL files
   - Verify corrupted record skipping with warning reports
   - _Requirements: 6.6, 6.7_
 
 - [ ] 6. Implement simulation and evaluation tests (D-E series)
-- [ ] 6.1 Create simulation parameter validation tests
 - [x] 6.1 Create simulation parameter validation tests
   - Test --hands parameter requirement and validation (reject N=0, handle large values)
   - Implement resume functionality testing with duplicate hand_id detection
   - Verify batched write performance for SQLite/JSONL output
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 6.2 Implement evaluation requirement tests
 - [x] 6.2 Implement evaluation requirement tests
   - Test required parameters: --ai-a, --ai-b, --hands for evaluation
   - Verify identical AI model warnings
