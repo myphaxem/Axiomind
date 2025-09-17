@@ -246,3 +246,76 @@ fn b5_verify_flags_raise_after_short_all_in() {
         res.stderr
     );
 }
+
+#[test]
+fn b6_verify_rejects_invalid_dealing_sequence() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000003",
+        "seed": 3,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p1", "p0", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T00:10:00Z"
+    });
+    let path = write_records(&tfm, "bad_deal.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(res.exit_code, 0, "verify should fail on invalid dealing sequence");
+    assert!(
+        res.stderr.to_lowercase().contains("deal"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn b6_verify_accepts_valid_dealing_sequence() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000004",
+        "seed": 4,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T00:11:00Z"
+    });
+    let path = write_records(&tfm, "good_deal.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_eq!(res.exit_code, 0, "verify should pass on valid dealing sequence");
+}
