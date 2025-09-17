@@ -22,3 +22,7 @@ axm-engine = { path = "../engine" }
 rand = "0.8"
 rand_chacha = "0.3"
 zstd = "0.13"
+
+[dev-dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+
