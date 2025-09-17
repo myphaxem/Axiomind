@@ -6,8 +6,6 @@ mod config;
 pub mod ui;
 use axm_engine::engine::Engine;
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
-use std::fs::File;
-use std::io::Read;
 
 use std::collections::HashSet;
 
@@ -578,6 +576,128 @@ where
             2
         }
     }
+
+    fn export_sqlite(content: &str, output: &str, err: &mut dyn Write) -> i32 {
+        let output_path = std::path::Path::new(output);
+        if let Some(parent) = output_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    let _ = ui::write_error(
+                        err,
+                        &format!("Failed to create directory {}: {}", parent.display(), e),
+                    );
+                    return 2;
+                }
+            }
+        }
+
+        let mut conn = match rusqlite::Connection::open(output) {
+            Ok(conn) => conn,
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to open {}: {}", output, e));
+                return 2;
+            }
+        };
+
+        let tx = match conn.transaction() {
+            Ok(tx) => tx,
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to start transaction: {}", e));
+                return 2;
+            }
+        };
+
+        if let Err(e) = tx.execute("DROP TABLE IF EXISTS hands", []) {
+            let _ = ui::write_error(err, &format!("Failed to reset schema: {}", e));
+            return 2;
+        }
+
+        if let Err(e) = tx.execute(
+            "CREATE TABLE hands (
+                hand_id TEXT PRIMARY KEY NOT NULL,
+                seed INTEGER,
+                result TEXT,
+                ts TEXT,
+                actions INTEGER NOT NULL,
+                board INTEGER NOT NULL,
+                raw_json TEXT NOT NULL
+            )",
+            [],
+        ) {
+            let _ = ui::write_error(err, &format!("Failed to create schema: {}", e));
+            return 2;
+        }
+
+        let mut stmt = match tx.prepare(
+            "INSERT INTO hands (hand_id, seed, result, ts, actions, board, raw_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        ) {
+            Ok(stmt) => stmt,
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to prepare insert: {}", e));
+                return 2;
+            }
+        };
+
+        for line in content.lines() {
+            let raw = line.trim();
+            if raw.is_empty() {
+                continue;
+            }
+
+            let record: axm_engine::logger::HandRecord = match serde_json::from_str(raw) {
+                Ok(rec) => rec,
+                Err(e) => {
+                    let _ = ui::write_error(err, &format!("Invalid record: {}", e));
+                    return 2;
+                }
+            };
+
+            let axm_engine::logger::HandRecord {
+                hand_id,
+                seed,
+                actions,
+                board,
+                result,
+                ts,
+                ..
+            } = record;
+
+            let actions_len = actions.len() as i64;
+            let board_len = board.len() as i64;
+
+            let seed_val = match seed {
+                Some(v) if v > i64::MAX as u64 => {
+                    let _ = ui::write_error(err, &format!("Seed {} exceeds supported range", v));
+                    return 2;
+                }
+                Some(v) => Some(v as i64),
+                None => None,
+            };
+
+            if let Err(e) = stmt.execute(rusqlite::params![
+                hand_id,
+                seed_val,
+                result,
+                ts,
+                actions_len,
+                board_len,
+                raw,
+            ]) {
+                let _ = ui::write_error(err, &format!("Failed to insert record: {}", e));
+                return 2;
+            }
+        }
+
+        drop(stmt);
+
+        if let Err(e) = tx.commit() {
+            let _ = ui::write_error(err, &format!("Failed to commit export: {}", e));
+            return 2;
+        }
+
+        0
+    }
     const COMMANDS: &[&str] = &[
         "play", "replay", "stats", "verify", "deal", "bench", "sim", "eval", "export", "dataset",
         "cfg", "doctor", "rng", "serve", "train",
@@ -1126,6 +1246,7 @@ where
                         std::fs::write(&output, s).unwrap();
                         0
                     }
+                    f if f.eq_ignore_ascii_case("sqlite") => export_sqlite(&content, &output, err),
                     _ => {
                         let _ = ui::write_error(err, "Unsupported format");
                         2

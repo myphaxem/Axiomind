@@ -94,7 +94,7 @@
   - Test file and directory input handling for statistics
   - _Requirements: 8.1, 6.6_
 
-- [ ] 7.2 Implement export functionality tests
+- [x] 7.2 Implement export functionality tests
   - Test JSONL to SQLite conversion with proper schema
   - Verify required columns and NOT NULL constraint enforcement
   - Test export format validation and error handling
