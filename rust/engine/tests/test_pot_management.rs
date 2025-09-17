@@ -13,4 +13,3 @@ fn equal_stacks_no_side_pot() {
     assert_eq!(pm.main_pot(), 2000);
     assert!(pm.side_pots().is_empty());
 }
-

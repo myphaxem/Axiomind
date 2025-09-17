@@ -7,7 +7,10 @@ fn hand_record_supports_timestamp_and_metadata() {
         hand_id: "20250102-000001".to_string(),
         seed: Some(1),
         actions: vec![],
-        board: vec![Card { suit: S::Clubs, rank: R::Ace }],
+        board: vec![Card {
+            suit: S::Clubs,
+            rank: R::Ace,
+        }],
         result: None,
         ts: Some("2025-01-02T03:04:05Z".to_string()),
         meta: Some(serde_json::json!({"note":"test"})),

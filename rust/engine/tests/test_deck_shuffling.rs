@@ -14,7 +14,10 @@ fn deck_reset_has_52_unique_cards() {
         let c = deck.deal_card().expect("should have 52 cards");
         assert!(set.insert(c), "card {:?} duplicated at position {}", c, i);
     }
-    assert!(deck.deal_card().is_none(), "after 52 cards, deck should be empty");
+    assert!(
+        deck.deal_card().is_none(),
+        "after 52 cards, deck should be empty"
+    );
 }
 
 #[test]
@@ -37,7 +40,10 @@ fn shuffle_differs_with_different_seed() {
     d2.shuffle();
     let a: Vec<Card> = (0..10).map(|_| d1.deal_card().unwrap()).collect();
     let b: Vec<Card> = (0..10).map(|_| d2.deal_card().unwrap()).collect();
-    assert_ne!(a, b, "different seeds should produce different orders (high probability)");
+    assert_ne!(
+        a, b,
+        "different seeds should produce different orders (high probability)"
+    );
 }
 
 #[test]
@@ -66,8 +72,9 @@ fn burn_and_deal_follow_holdem_procedure() {
 
     // Ensure all these cards are unique
     let mut set = HashSet::new();
-    for c in [p1[0], p1[1], p2[0], p2[1], flop[0], flop[1], flop[2], turn, river] {
+    for c in [
+        p1[0], p1[1], p2[0], p2[1], flop[0], flop[1], flop[2], turn, river,
+    ] {
         assert!(set.insert(c));
     }
 }
-

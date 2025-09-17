@@ -14,4 +14,3 @@ fn burn_cards_and_board_count_are_correct() {
     // Remaining cards: 52 - 4 (holes) - 3 (flop) - 1 (turn) - 1 (river) - 3 burns = 40
     assert_eq!(eng.deck_remaining(), 40);
 }
-

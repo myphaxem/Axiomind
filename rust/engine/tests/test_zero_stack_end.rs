@@ -13,4 +13,3 @@ fn zero_stack_prevents_new_hand() {
     let r = eng.deal_hand();
     assert!(r.is_err(), "deal_hand should error when any stack is zero");
 }
-

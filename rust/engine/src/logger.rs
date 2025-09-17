@@ -4,7 +4,12 @@ use crate::cards::Card;
 use crate::player::PlayerAction;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Street { Preflop, Flop, Turn, River }
+pub enum Street {
+    Preflop,
+    Flop,
+    Turn,
+    River,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ActionRecord {
@@ -32,10 +37,10 @@ pub fn format_hand_id(yyyymmdd: &str, seq: u32) -> String {
     format!("{}-{:06}", yyyymmdd, seq)
 }
 
-use std::fs::{File, create_dir_all};
+use chrono::{SecondsFormat, Utc};
+use std::fs::{create_dir_all, File};
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use chrono::{Utc, SecondsFormat};
 
 pub struct HandLogger {
     writer: Option<BufWriter<File>>,
@@ -52,13 +57,25 @@ pub struct ShowdownInfo {
 
 impl HandLogger {
     pub fn create<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
-        if let Some(parent) = path.as_ref().parent() { if !parent.as_os_str().is_empty() { let _ = create_dir_all(parent); } }
+        if let Some(parent) = path.as_ref().parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = create_dir_all(parent);
+            }
+        }
         let f = File::create(path)?;
-        Ok(Self { writer: Some(BufWriter::new(f)), date: "19700101".to_string(), seq: 0 })
+        Ok(Self {
+            writer: Some(BufWriter::new(f)),
+            date: "19700101".to_string(),
+            seq: 0,
+        })
     }
 
     pub fn with_seq_for_test(date: &str) -> Self {
-        Self { writer: None, date: date.to_string(), seq: 0 }
+        Self {
+            writer: None,
+            date: date.to_string(),
+            seq: 0,
+        }
     }
 
     pub fn next_id(&mut self) -> String {
@@ -73,7 +90,11 @@ impl HandLogger {
             rec.ts = Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
         }
         let line = serde_json::to_string(&rec).expect("serialize");
-        if let Some(w) = &mut self.writer { w.write_all(line.as_bytes())?; w.write_all(b"\n")?; w.flush()?; }
+        if let Some(w) = &mut self.writer {
+            w.write_all(line.as_bytes())?;
+            w.write_all(b"\n")?;
+            w.flush()?;
+        }
         Ok(())
     }
 }

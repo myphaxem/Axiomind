@@ -26,7 +26,11 @@ impl CliRunner {
         // Prefer Cargo-provided path to the compiled binary
         if let Ok(p) = std::env::var("CARGO_BIN_EXE_axm") {
             let pb = PathBuf::from(p);
-            if pb.exists() { return Ok(Self { mode: RunMode::Binary(pb) }); }
+            if pb.exists() {
+                return Ok(Self {
+                    mode: RunMode::Binary(pb),
+                });
+            }
         }
 
         // Fallback to target/{debug|release}/axm[.exe]
@@ -35,11 +39,15 @@ impl CliRunner {
         cand.push("debug");
         cand.push(if cfg!(windows) { "axm.exe" } else { "axm" });
         if cand.exists() {
-            return Ok(Self { mode: RunMode::Binary(cand) });
+            return Ok(Self {
+                mode: RunMode::Binary(cand),
+            });
         }
 
         // Fallback to direct library invocation (no mock; calls real CLI entrypoint)
-        Ok(Self { mode: RunMode::Library })
+        Ok(Self {
+            mode: RunMode::Library,
+        })
     }
 
     pub fn run(&self, args: &[&str]) -> CliResult {
@@ -69,7 +77,11 @@ impl CliRunner {
             RunMode::Binary(bin) => {
                 let mut cmd = Command::new(bin);
                 cmd.args(args)
-                    .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
+                    .stdin(if input.is_some() {
+                        Stdio::piped()
+                    } else {
+                        Stdio::null()
+                    })
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
                 for (k, v) in env.iter() {

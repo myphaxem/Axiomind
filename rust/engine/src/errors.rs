@@ -7,4 +7,3 @@ pub enum GameError {
     #[error("Insufficient chips for action")]
     InsufficientChips,
 }
-

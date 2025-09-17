@@ -28,9 +28,18 @@ pub enum Rank {
 impl Rank {
     pub fn from_u8(v: u8) -> Rank {
         match v {
-            2 => Rank::Two, 3 => Rank::Three, 4 => Rank::Four, 5 => Rank::Five,
-            6 => Rank::Six, 7 => Rank::Seven, 8 => Rank::Eight, 9 => Rank::Nine,
-            10 => Rank::Ten, 11 => Rank::Jack, 12 => Rank::Queen, 13 => Rank::King,
+            2 => Rank::Two,
+            3 => Rank::Three,
+            4 => Rank::Four,
+            5 => Rank::Five,
+            6 => Rank::Six,
+            7 => Rank::Seven,
+            8 => Rank::Eight,
+            9 => Rank::Nine,
+            10 => Rank::Ten,
+            11 => Rank::Jack,
+            12 => Rank::Queen,
+            13 => Rank::King,
             _ => Rank::Ace,
         }
     }

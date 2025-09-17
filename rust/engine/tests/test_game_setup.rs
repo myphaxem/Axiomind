@@ -17,4 +17,3 @@ fn same_seed_produces_deterministic_deal_order() {
     let b = e2.draw_n(5);
     assert_eq!(a, b);
 }
-

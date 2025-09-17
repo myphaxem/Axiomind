@@ -20,9 +20,23 @@ fn assertions_jsonl_required_fields_and_chip_conservation() {
 
     let a = assertions::asserter();
     a.assert_jsonl_format(jsonl);
-    a.assert_required_fields(jsonl, &[
-        "hand_id","seed","level","blinds","button","players","actions","board","showdown","net_result","end_reason","timestamp"
-    ]);
+    a.assert_required_fields(
+        jsonl,
+        &[
+            "hand_id",
+            "seed",
+            "level",
+            "blinds",
+            "button",
+            "players",
+            "actions",
+            "board",
+            "showdown",
+            "net_result",
+            "end_reason",
+            "timestamp",
+        ],
+    );
     a.assert_chip_conservation(jsonl);
     a.assert_valid_hand_id("20250101-000001");
 }

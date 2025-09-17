@@ -1,6 +1,6 @@
 use rand::seq::SliceRandom;
-use rand_chacha::ChaCha20Rng;
 use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 
 use crate::cards::{full_deck, Card};
 
@@ -14,7 +14,11 @@ pub struct Deck {
 impl Deck {
     pub fn new_with_seed(seed: u64) -> Self {
         let rng = ChaCha20Rng::seed_from_u64(seed);
-        let mut d = Self { cards: full_deck(), position: 0, rng };
+        let mut d = Self {
+            cards: full_deck(),
+            position: 0,
+            rng,
+        };
         // Keep initial order until shuffle is called explicitly
         d
     }

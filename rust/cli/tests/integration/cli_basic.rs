@@ -15,8 +15,8 @@ fn a1_help_lists_all_commands() {
     assert_eq!(res.exit_code, 0, "--help should exit with code 0");
     let out = res.stdout;
     for cmd in [
-        "play", "replay", "sim", "eval", "stats", "verify",
-        "deal", "bench", "rng", "cfg", "doctor", "export", "dataset",
+        "play", "replay", "sim", "eval", "stats", "verify", "deal", "bench", "rng", "cfg",
+        "doctor", "export", "dataset",
         // per requirements, help must also mention serve/train
         "serve", "train",
     ] {
@@ -29,7 +29,10 @@ fn a2_version_prints_version_and_exits_zero() {
     let cli = CliRunner::new().expect("CliRunner should initialize");
     let res = cli.run(&["--version"]);
     assert_eq!(res.exit_code, 0, "--version should exit 0");
-    assert!(res.stdout.trim().len() > 0, "version should print some text");
+    assert!(
+        res.stdout.trim().len() > 0,
+        "version should print some text"
+    );
 }
 
 #[test]
@@ -39,6 +42,13 @@ fn a3_unknown_subcommand_shows_help_excerpt_on_stderr() {
     assert_ne!(res.exit_code, 0, "unknown subcommand should be non-zero");
     // Expect help excerpt to include the Commands list (not just Usage)
     let err = res.stderr;
-    assert!(err.contains("Commands:"), "stderr should contain help Commands section\n---stderr---\n{}\n-----------", err);
-    assert!(err.contains("play"), "stderr help excerpt should list 'play'");
+    assert!(
+        err.contains("Commands:"),
+        "stderr should contain help Commands section\n---stderr---\n{}\n-----------",
+        err
+    );
+    assert!(
+        err.contains("play"),
+        "stderr help excerpt should list 'play'"
+    );
 }

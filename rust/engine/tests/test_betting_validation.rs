@@ -1,11 +1,20 @@
+use axm_engine::errors::GameError;
 use axm_engine::player::PlayerAction as A;
 use axm_engine::rules::{validate_action, ValidatedAction};
-use axm_engine::errors::GameError;
 
 #[test]
 fn bet_zero_is_invalid() {
-    let err = validate_action(10_000, /*to_call*/0, /*min_raise*/100, A::Bet(0)).unwrap_err();
-    match err { GameError::InvalidBetAmount{..} => {}, _ => panic!("expected InvalidBetAmount") }
+    let err = validate_action(
+        10_000,
+        /*to_call*/ 0,
+        /*min_raise*/ 100,
+        A::Bet(0),
+    )
+    .unwrap_err();
+    match err {
+        GameError::InvalidBetAmount { .. } => {}
+        _ => panic!("expected InvalidBetAmount"),
+    }
 }
 
 #[test]
@@ -26,4 +35,3 @@ fn short_raise_becomes_allin_without_error() {
     let va = validate_action(130, 100, 100, A::Raise(50)).unwrap();
     assert_eq!(va, ValidatedAction::AllIn(130));
 }
-

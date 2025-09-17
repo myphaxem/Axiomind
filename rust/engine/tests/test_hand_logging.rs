@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use axm_engine::cards::{Card, Rank as R, Suit as S};
-use axm_engine::logger::{HandRecord, ActionRecord, Street, HandLogger};
+use axm_engine::logger::{ActionRecord, HandLogger, HandRecord, Street};
 use axm_engine::player::PlayerAction;
 
 fn tmp_path(name: &str) -> PathBuf {
@@ -18,8 +18,15 @@ fn writes_jsonl_with_lf_only() {
     let rec = HandRecord {
         hand_id: "20250102-000001".to_string(),
         seed: Some(1),
-        actions: vec![ActionRecord { player_id: 0, street: Street::Preflop, action: PlayerAction::Check }],
-        board: vec![Card { suit: S::Clubs, rank: R::Ace }],
+        actions: vec![ActionRecord {
+            player_id: 0,
+            street: Street::Preflop,
+            action: PlayerAction::Check,
+        }],
+        board: vec![Card {
+            suit: S::Clubs,
+            rank: R::Ace,
+        }],
         result: Some("p0".to_string()),
         ts: None,
         meta: None,
@@ -44,8 +51,17 @@ fn ts_is_generated_when_missing_and_preserved_when_present() {
     let mut logger = HandLogger::create(&path).expect("create logger");
     // missing ts -> logger should inject it
     let rec = HandRecord {
-        hand_id: "20250102-000010".to_string(), seed: Some(7), actions: vec![],
-        board: vec![Card { suit: S::Clubs, rank: R::Ace }], result: None, ts: None, meta: None, showdown: None,
+        hand_id: "20250102-000010".to_string(),
+        seed: Some(7),
+        actions: vec![],
+        board: vec![Card {
+            suit: S::Clubs,
+            rank: R::Ace,
+        }],
+        result: None,
+        ts: None,
+        meta: None,
+        showdown: None,
     };
     logger.write(&rec).expect("write");
     let line = String::from_utf8(fs::read(&path).unwrap()).unwrap();
@@ -53,7 +69,10 @@ fn ts_is_generated_when_missing_and_preserved_when_present() {
 
     // preset ts should be preserved
     let preset = "2030-01-01T00:00:00Z".to_string();
-    let rec2 = HandRecord { ts: Some(preset.clone()), ..rec };
+    let rec2 = HandRecord {
+        ts: Some(preset.clone()),
+        ..rec
+    };
     logger.write(&rec2).expect("write2");
     let content = String::from_utf8(fs::read(&path).unwrap()).unwrap();
     assert!(content.contains(&preset), "preset ts must be kept");

@@ -15,3 +15,5 @@ Thumbs.db
 # Misc cache
 .cache/
 
+AGENTS.md
+.serena/

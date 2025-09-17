@@ -13,12 +13,17 @@ impl PotManager {
         let mut sides = Vec::new();
         if a != b {
             let side = a.max(b) - shared;
-            if side > 0 { sides.push(side); }
+            if side > 0 {
+                sides.push(side);
+            }
         }
         Self { main, sides }
     }
 
-    pub fn main_pot(&self) -> u32 { self.main }
-    pub fn side_pots(&self) -> &[u32] { &self.sides }
+    pub fn main_pot(&self) -> u32 {
+        self.main
+    }
+    pub fn side_pots(&self) -> &[u32] {
+        &self.sides
+    }
 }
-

@@ -17,10 +17,22 @@ fn c8_stats_scans_directory_recursively_and_reports_warnings() {
 
     let cli = CliRunner::new().unwrap();
     let res = cli.run(&["stats", "--input", &dir.to_string_lossy()]);
-    assert_eq!(res.exit_code, 0, "stats on directory should succeed, stderr: {}", res.stderr);
+    assert_eq!(
+        res.exit_code, 0,
+        "stats on directory should succeed, stderr: {}",
+        res.stderr
+    );
     // Expect 3 valid hands counted
-    assert!(res.stdout.contains("\"hands\": 3"), "stdout: {}", res.stdout);
+    assert!(
+        res.stdout.contains("\"hands\": 3"),
+        "stdout: {}",
+        res.stdout
+    );
     // Warnings aggregated
     let err = res.stderr.to_lowercase();
-    assert!(err.contains("discarded 1 incomplete"), "stderr should report incomplete final line: {}", res.stderr);
+    assert!(
+        err.contains("discarded 1 incomplete"),
+        "stderr should report incomplete final line: {}",
+        res.stderr
+    );
 }

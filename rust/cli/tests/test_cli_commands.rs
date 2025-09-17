@@ -8,10 +8,14 @@ fn help_lists_expected_commands() {
     let _code = run(["axm", "--help"], &mut out, &mut err);
     let stdout = String::from_utf8_lossy(&out);
     for cmd in [
-        "play", "replay", "stats", "verify", "deal", "bench",
-        "sim", "eval", "export", "dataset", "cfg", "doctor", "rng",
+        "play", "replay", "stats", "verify", "deal", "bench", "sim", "eval", "export", "dataset",
+        "cfg", "doctor", "rng",
     ] {
-        assert!(stdout.contains(cmd), "help should list subcommand `{}`", cmd);
+        assert!(
+            stdout.contains(cmd),
+            "help should list subcommand `{}`",
+            cmd
+        );
     }
 }
 
@@ -31,7 +35,11 @@ fn play_parses_args() {
     // In non-TTY test environment, use AI opponent to validate arg parsing
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
-    let _code = run(["axm", "play", "--vs", "ai", "--hands", "3", "--seed", "42"], &mut out, &mut err);
+    let _code = run(
+        ["axm", "play", "--vs", "ai", "--hands", "3", "--seed", "42"],
+        &mut out,
+        &mut err,
+    );
     let stdout = String::from_utf8_lossy(&out);
     assert!(stdout.contains("play: vs=ai hands=3 seed=42"));
 }
@@ -54,7 +62,9 @@ fn cfg_reads_env_and_file_with_validation() {
     // Prepare config file
     let mut p = PathBuf::from("target");
     p.push(format!("axm_cfg_{}.toml", std::process::id()));
-    if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).unwrap(); }
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
     fs::write(&p, "seed = 456\nlevel = 3\n").unwrap();
     std::env::set_var("AXM_CONFIG", &p);
     std::env::set_var("AXM_SEED", "123"); // env should override file

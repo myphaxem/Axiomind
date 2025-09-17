@@ -1,6 +1,6 @@
 use axm_engine::cards::{Card, Rank, Suit};
-use axm_engine::player::{Player, Position, PlayerAction, STARTING_STACK};
 use axm_engine::game::GameState;
+use axm_engine::player::{Player, PlayerAction, Position, STARTING_STACK};
 
 #[test]
 fn players_start_with_20000_and_positions() {
@@ -15,8 +15,14 @@ fn players_start_with_20000_and_positions() {
 #[test]
 fn player_receives_two_hole_cards() {
     let mut p = Player::new(0, STARTING_STACK, Position::Button);
-    let a = Card { suit: Suit::Spades, rank: Rank::Ace };
-    let k = Card { suit: Suit::Spades, rank: Rank::King };
+    let a = Card {
+        suit: Suit::Spades,
+        rank: Rank::Ace,
+    };
+    let k = Card {
+        suit: Suit::Spades,
+        rank: Rank::King,
+    };
     p.give_card(a).unwrap();
     p.give_card(k).unwrap();
     let hc = p.hole_cards();
@@ -55,4 +61,3 @@ fn player_action_enum_is_available() {
         _ => panic!("expected Bet variant"),
     }
 }
-

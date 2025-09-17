@@ -67,8 +67,15 @@ fn b1_verify_rejects_additional_hands_after_bust() {
 
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
-    assert_ne!(res.exit_code, 0, "verify should fail when hands continue after bust");
-    assert!(res.stderr.to_lowercase().contains("stack"), "stderr: {}", res.stderr);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when hands continue after bust"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("stack"),
+        "stderr: {}",
+        res.stderr
+    );
 }
 
 #[test]
@@ -125,7 +132,11 @@ fn b2_verify_chip_conservation_fails_when_sum_nonzero() {
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
     assert_ne!(res.exit_code, 0);
-    assert!(res.stderr.to_lowercase().contains("chip"), "stderr: {}", res.stderr);
+    assert!(
+        res.stderr.to_lowercase().contains("chip"),
+        "stderr: {}",
+        res.stderr
+    );
 }
 #[test]
 fn b3_verify_rejects_invalid_chip_unit_bet() {
@@ -155,7 +166,11 @@ fn b3_verify_rejects_invalid_chip_unit_bet() {
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
     assert_ne!(res.exit_code, 0, "verify should fail on invalid bet size");
-    assert!(res.stderr.to_lowercase().contains("bet"), "stderr: {}", res.stderr);
+    assert!(
+        res.stderr.to_lowercase().contains("bet"),
+        "stderr: {}",
+        res.stderr
+    );
 }
 #[test]
 fn b4_verify_rejects_under_minimum_raise_delta() {
@@ -186,7 +201,11 @@ fn b4_verify_rejects_under_minimum_raise_delta() {
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
     assert_ne!(res.exit_code, 0, "verify should fail on short raise");
-    assert!(res.stderr.to_lowercase().contains("raise"), "stderr: {}", res.stderr);
+    assert!(
+        res.stderr.to_lowercase().contains("raise"),
+        "stderr: {}",
+        res.stderr
+    );
 }
 #[test]
 fn b5_verify_flags_raise_after_short_all_in() {
@@ -217,6 +236,13 @@ fn b5_verify_flags_raise_after_short_all_in() {
 
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
-    assert_ne!(res.exit_code, 0, "verify should fail when betting reopens after short all-in");
-    assert!(res.stderr.to_lowercase().contains("all-in") || res.stderr.to_lowercase().contains("raise"), "stderr: {}", res.stderr);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when betting reopens after short all-in"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("all-in") || res.stderr.to_lowercase().contains("raise"),
+        "stderr: {}",
+        res.stderr
+    );
 }

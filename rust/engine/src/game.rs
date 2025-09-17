@@ -10,15 +10,27 @@ pub struct GameState {
 impl GameState {
     pub fn new(players: [Player; 2], level: u8) -> Self {
         // derive button_index from players' positions, default to 0
-        let button_index = if players[1].position() == Position::Button { 1 } else { 0 };
-        let mut gs = Self { level, button_index, players };
+        let button_index = if players[1].position() == Position::Button {
+            1
+        } else {
+            0
+        };
+        let mut gs = Self {
+            level,
+            button_index,
+            players,
+        };
         // normalize positions based on button_index
         gs.sync_positions();
         gs
     }
 
-    pub fn button_index(&self) -> usize { self.button_index }
-    pub fn players(&self) -> &[Player; 2] { &self.players }
+    pub fn button_index(&self) -> usize {
+        self.button_index
+    }
+    pub fn players(&self) -> &[Player; 2] {
+        &self.players
+    }
 
     pub fn rotate_button(&mut self) {
         self.button_index = 1 - self.button_index;
@@ -38,4 +50,3 @@ impl GameState {
         }
     }
 }
-

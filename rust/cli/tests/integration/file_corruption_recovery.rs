@@ -8,7 +8,11 @@ fn c4_incomplete_final_line_is_discarded_in_stats() {
     let cli = CliRunner::new().unwrap();
     let res = cli.run(&["stats", "--input", &p.to_string_lossy()]);
     assert_eq!(res.exit_code, 0, "stats should succeed");
-    assert!(res.stdout.contains("\"hands\": 2"), "should count only valid lines: {}", res.stdout);
+    assert!(
+        res.stdout.contains("\"hands\": 2"),
+        "should count only valid lines: {}",
+        res.stdout
+    );
 }
 
 #[test]
@@ -32,7 +36,12 @@ fn c6_non_utf8_reports_clear_error() {
     let cli = CliRunner::new().unwrap();
     let res = cli.run(&["stats", "--input", &path.to_string_lossy()]);
     assert_ne!(res.exit_code, 0);
-    assert!(res.stderr.to_lowercase().contains("failed to read") || res.stderr.to_lowercase().contains("utf"), "stderr: {}", res.stderr);
+    assert!(
+        res.stderr.to_lowercase().contains("failed to read")
+            || res.stderr.to_lowercase().contains("utf"),
+        "stderr: {}",
+        res.stderr
+    );
 }
 
 #[test]
@@ -42,7 +51,8 @@ fn c7_zstd_compressed_jsonl_is_supported() {
     let dir = tfm.create_directory("zstd").unwrap();
     let path = dir.join("data.jsonl.zst");
     {
-        let mut enc = zstd::stream::write::Encoder::new(std::fs::File::create(&path).unwrap(), 0).unwrap();
+        let mut enc =
+            zstd::stream::write::Encoder::new(std::fs::File::create(&path).unwrap(), 0).unwrap();
         use std::io::Write as _;
         enc.write_all(raw.as_bytes()).unwrap();
         enc.finish().unwrap();
@@ -50,6 +60,9 @@ fn c7_zstd_compressed_jsonl_is_supported() {
     let cli = CliRunner::new().unwrap();
     let res = cli.run(&["stats", "--input", &path.to_string_lossy()]);
     assert_eq!(res.exit_code, 0, "stats should succeed on zstd");
-    assert!(res.stdout.contains("\"hands\": 2"), "stdout: {}", res.stdout);
+    assert!(
+        res.stdout.contains("\"hands\": 2"),
+        "stdout: {}",
+        res.stdout
+    );
 }
-
