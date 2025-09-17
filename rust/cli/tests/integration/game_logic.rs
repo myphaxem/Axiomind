@@ -278,7 +278,10 @@ fn b6_verify_rejects_invalid_dealing_sequence() {
 
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
-    assert_ne!(res.exit_code, 0, "verify should fail on invalid dealing sequence");
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail on invalid dealing sequence"
+    );
     assert!(
         res.stderr.to_lowercase().contains("deal"),
         "stderr: {}",
@@ -317,5 +320,8 @@ fn b6_verify_accepts_valid_dealing_sequence() {
 
     let cli = CliRunner::new().expect("cli runner");
     let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
-    assert_eq!(res.exit_code, 0, "verify should pass on valid dealing sequence");
+    assert_eq!(
+        res.exit_code, 0,
+        "verify should pass on valid dealing sequence"
+    );
 }

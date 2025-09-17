@@ -6,7 +6,7 @@
   - Add #![deny(warnings)] to prevent regression
   - _Requirements: All requirements depend on warning-free code_
 
-- [ ] 2. Create core test infrastructure and utilities
+- [x] 2. Create core test infrastructure and utilities
 - [x] 2.1 Implement CLI test runner utility
   - Create rust/cli/tests/helpers/mod.rs with common test utilities
   - Implement CliRunner struct for executing CLI commands with controlled inputs/outputs
@@ -25,7 +25,7 @@
   - Create deterministic output comparison utilities
   - _Requirements: 4.2, 5.1, 5.2, 8.1_
 
-- [ ] 3. Implement basic CLI functionality tests (A-series)
+- [x] 3. Implement basic CLI functionality tests (A-series)
 - [x] 3.1 Create basic CLI command tests
   - Write tests for axm --version and axm --help with exit code validation
   - Verify help text contains all required commands (play/replay/sim/eval/stats/verify/deal/bench/rng/cfg/doctor/export/dataset/serve/train)
@@ -38,8 +38,8 @@
   - Test input validation for required arguments and type checking
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3_
 
-- [ ] 4. Implement game logic validation tests (B-series)
-- [ ] 4.1 Create game termination and chip conservation tests
+- [x] 4. Implement game logic validation tests (B-series)
+- [x] 4.1 Create game termination and chip conservation tests
   - Test immediate game termination when any stack reaches zero
   - Verify JSONL final record satisfies chip conservation laws
   - Test invalid bet amount handling with minimum chip unit validation
@@ -56,7 +56,7 @@
   - Test reproducible evaluation results with fixed seeds
   - _Requirements: 5.1, 5.2_
 
-- [ ] 5. Implement file I/O and data handling tests (C-series)
+- [x] 5. Implement file I/O and data handling tests (C-series)
 - [x] 5.1 Create input validation and error handling tests
   - Test --input requirement for replay command
   - Verify --speed range validation (reject 0 and negative values)
@@ -74,7 +74,7 @@
   - Verify corrupted record skipping with warning reports
   - _Requirements: 6.6, 6.7_
 
-- [ ] 6. Implement simulation and evaluation tests (D-E series)
+- [x] 6. Implement simulation and evaluation tests (D-E series)
 - [x] 6.1 Create simulation parameter validation tests
   - Test --hands parameter requirement and validation (reject N=0, handle large values)
   - Implement resume functionality testing with duplicate hand_id detection

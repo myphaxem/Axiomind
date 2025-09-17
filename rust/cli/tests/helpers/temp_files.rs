@@ -34,9 +34,12 @@ impl TempFileManager {
 
     pub fn create_file<P: AsRef<Path>>(&self, name: P, content: &str) -> Result<PathBuf, String> {
         let p = self.base_dir.join(name);
-        if let Some(parent) = p.parent() { fs::create_dir_all(parent).map_err(|e| format!("parent dir: {}", e))?; }
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("parent dir: {}", e))?;
+        }
         let mut f = File::create(&p).map_err(|e| format!("create: {}", e))?;
-        f.write_all(content.as_bytes()).map_err(|e| format!("write: {}", e))?;
+        f.write_all(content.as_bytes())
+            .map_err(|e| format!("write: {}", e))?;
         Ok(p)
     }
 }

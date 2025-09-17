@@ -9,6 +9,8 @@ use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use std::fs::File;
 use std::io::Read;
 
+use std::collections::HashSet;
+
 fn ensure_no_reopen_after_short_all_in(
     actions: &[serde_json::Value],
     big_blind: i64,
@@ -228,6 +230,170 @@ fn ensure_no_reopen_after_short_all_in(
         street_committed.insert(player_id, new_commit);
     }
 
+    Ok(())
+}
+
+fn validate_dealing_meta(
+    meta: &serde_json::Map<String, serde_json::Value>,
+    button: Option<&str>,
+    starting_stacks: &HashMap<String, i64>,
+    hand_index: u64,
+) -> Result<(), String> {
+    if starting_stacks.is_empty() {
+        return Ok(());
+    }
+    let player_count = starting_stacks.len();
+    let rounds = 2; // Texas Hold'em: two hole cards per player
+    let sb = meta.get("small_blind").and_then(|v| v.as_str());
+    let bb = meta.get("big_blind").and_then(|v| v.as_str());
+    if let Some(sb_id) = sb {
+        if !starting_stacks.contains_key(sb_id) {
+            return Err(format!(
+                "Invalid dealing order at hand {}: unknown small blind {}",
+                hand_index, sb_id
+            ));
+        }
+    }
+    if let Some(bb_id) = bb {
+        if !starting_stacks.contains_key(bb_id) {
+            return Err(format!(
+                "Invalid dealing order at hand {}: unknown big blind {}",
+                hand_index, bb_id
+            ));
+        }
+    }
+    if let (Some(btn), Some(sb_id)) = (button, sb) {
+        if sb_id != btn {
+            return Err(format!(
+                "Invalid dealing order at hand {}: button {} must match small blind {}",
+                hand_index, btn, sb_id
+            ));
+        }
+    }
+    if let (Some(sb_id), Some(bb_id)) = (sb, bb) {
+        if sb_id == bb_id {
+            return Err(format!(
+                "Invalid dealing order at hand {}: small blind and big blind must differ",
+                hand_index
+            ));
+        }
+        if player_count == 2 {
+            if let Some(expected_bb) = starting_stacks
+                .keys()
+                .find(|id| id.as_str() != sb_id)
+                .map(|s| s.as_str())
+            {
+                if bb_id != expected_bb {
+                    return Err(format!(
+                        "Invalid dealing order at hand {}: expected big blind {} but found {}",
+                        hand_index, expected_bb, bb_id
+                    ));
+                }
+            }
+        }
+    }
+    if let Some(seq_val) = meta.get("deal_sequence") {
+        let seq = seq_val.as_array().ok_or_else(|| {
+            format!(
+                "Invalid dealing order at hand {}: deal_sequence must be an array",
+                hand_index
+            )
+        })?;
+        let seq_ids: Option<Vec<&str>> = seq.iter().map(|v| v.as_str()).collect();
+        let seq_ids = seq_ids.ok_or_else(|| {
+            format!(
+                "Invalid dealing order at hand {}: deal_sequence must contain player identifiers",
+                hand_index
+            )
+        })?;
+        let expected_len = player_count * rounds;
+        if seq_ids.len() != expected_len {
+            return Err(format!(
+                "Invalid dealing order at hand {}: expected {} entries in deal_sequence but found {}",
+                hand_index,
+                expected_len,
+                seq_ids.len()
+            ));
+        }
+        let known: HashSet<&str> = starting_stacks.keys().map(|k| k.as_str()).collect();
+        if seq_ids.iter().any(|id| !known.contains(id)) {
+            return Err(format!(
+                "Invalid dealing order at hand {}: deal_sequence references unknown player",
+                hand_index
+            ));
+        }
+        let first_round = &seq_ids[..player_count];
+        if let Some(sb_id) = sb {
+            if first_round.first().copied() != Some(sb_id) {
+                return Err(format!(
+                    "Invalid dealing order at hand {}: expected {} to receive the first card",
+                    hand_index, sb_id
+                ));
+            }
+        }
+        if let Some(bb_id) = bb {
+            if player_count >= 2 {
+                if first_round.get(1).copied() != Some(bb_id) {
+                    return Err(format!(
+                        "Invalid dealing order at hand {}: expected {} to receive the second card",
+                        hand_index, bb_id
+                    ));
+                }
+            }
+        }
+        let first_round_set: HashSet<&str> = first_round.iter().copied().collect();
+        if first_round_set.len() != player_count {
+            return Err(format!(
+                "Invalid dealing order at hand {}: duplicate players in first deal round",
+                hand_index
+            ));
+        }
+        for round_idx in 1..rounds {
+            let chunk = &seq_ids[round_idx * player_count..(round_idx + 1) * player_count];
+            if chunk != first_round {
+                return Err(format!(
+                    "Invalid dealing order at hand {}: inconsistent card distribution order",
+                    hand_index
+                ));
+            }
+        }
+    }
+    if let Some(burn_val) = meta.get("burn_positions") {
+        let burn_arr = burn_val.as_array().ok_or_else(|| {
+            format!(
+                "Invalid dealing order at hand {}: burn_positions must be an array",
+                hand_index
+            )
+        })?;
+        let burn_positions: Option<Vec<i64>> = burn_arr.iter().map(|v| v.as_i64()).collect();
+        let burn_positions = burn_positions.ok_or_else(|| {
+            format!(
+                "Invalid dealing order at hand {}: burn_positions must contain integers",
+                hand_index
+            )
+        })?;
+        if burn_positions.len() != 3 {
+            return Err(format!(
+                "Invalid dealing order at hand {}: expected 3 burn positions",
+                hand_index
+            ));
+        }
+        let player_count_i64 = player_count as i64;
+        if player_count_i64 >= 2 {
+            let hole_cards = player_count_i64 * 2;
+            let expected = vec![
+                hole_cards + 1,
+                hole_cards + 1 + 3 + 1,
+                hole_cards + 1 + 3 + 1 + 1 + 1,
+            ];
+            if burn_positions != expected {
+                return Err(format!(
+                    "Invalid dealing order at hand {}: expected burn positions {:?} but found {:?}",
+                    hand_index, expected, burn_positions
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -569,6 +735,18 @@ where
                                 }
                                 starting_stacks = Some(start_map.clone());
                                 stacks_after_hand = start_map;
+                            }
+                            if let (Some(ref start_map), Some(meta_obj)) = (
+                                starting_stacks.as_ref(),
+                                v.get("meta").and_then(|m| m.as_object()),
+                            ) {
+                                let button_id = v.get("button").and_then(|b| b.as_str());
+                                if let Err(msg) =
+                                    validate_dealing_meta(meta_obj, button_id, start_map, hands)
+                                {
+                                    ok = false;
+                                    let _ = ui::write_error(err, &msg);
+                                }
                             }
                             let mut big_blind = MIN_CHIP_UNIT;
                             if let Some(blinds_val) = v.get("blinds") {
