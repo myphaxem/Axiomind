@@ -85,4 +85,8 @@ fn cfg_reads_env_and_file_with_validation() {
     assert_ne!(code2, 0);
     let stderr = String::from_utf8_lossy(&err2);
     assert!(stderr.contains("Invalid configuration"));
+
+    std::env::remove_var("AXM_CONFIG");
+    std::env::remove_var("AXM_SEED");
+    std::env::remove_var("AXM_LEVEL");
 }

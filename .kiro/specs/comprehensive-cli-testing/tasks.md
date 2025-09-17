@@ -88,7 +88,7 @@
   - _Requirements: 7.4, 7.5, 5.2_
 
 - [ ] 7. Implement statistics and export tests (F-G series)
-- [ ] 7.1 Create statistics validation tests
+- [x] 7.1 Create statistics validation tests
   - Test win/loss total conservation (sum to zero)
   - Verify chip conservation in statistical calculations
   - Test file and directory input handling for statistics

@@ -56,6 +56,11 @@ fn i2_precedence_cli_over_env_over_file_for_seed_and_ai() {
         r1.stdout, r2.stdout,
         "same seed should produce identical RNG output"
     );
+
+    std::env::remove_var("AXM_CONFIG");
+    std::env::remove_var("AXM_SEED");
+    std::env::remove_var("AXM_AI_VERSION");
+    std::env::remove_var("AXM_ADAPTIVE");
 }
 
 #[test]

@@ -421,6 +421,163 @@ where
         }
         Ok(())
     }
+
+    fn run_stats(input: &str, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+        use std::path::Path;
+
+        struct StatsState {
+            hands: u64,
+            p0: u64,
+            p1: u64,
+            skipped: u64,
+            corrupted: u64,
+            stats_ok: bool,
+        }
+
+        fn consume_stats_content(content: String, state: &mut StatsState, err: &mut dyn Write) {
+            let has_trailing_nl = content.ends_with('\n');
+            let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+            for (i, line) in lines.iter().enumerate() {
+                let parsed: serde_json::Value = match serde_json::from_str(line) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        if i == lines.len() - 1 && !has_trailing_nl {
+                            state.skipped += 1;
+                        } else {
+                            state.corrupted += 1;
+                        }
+                        continue;
+                    }
+                };
+
+                let rec: axm_engine::logger::HandRecord =
+                    match serde_json::from_value(parsed.clone()) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            state.corrupted += 1;
+                            continue;
+                        }
+                    };
+
+                if let Some(net_obj) = parsed.get("net_result").and_then(|v| v.as_object()) {
+                    let mut sum = 0i64;
+                    let mut invalid = false;
+                    for (player, val) in net_obj {
+                        if let Some(n) = val.as_i64() {
+                            sum += n;
+                        } else {
+                            invalid = true;
+                            state.stats_ok = false;
+                            let _ = ui::write_error(
+                                err,
+                                &format!(
+                                    "Invalid net_result value for {} at hand {}",
+                                    player, rec.hand_id
+                                ),
+                            );
+                        }
+                    }
+                    if sum != 0 {
+                        state.stats_ok = false;
+                        let _ = ui::write_error(
+                            err,
+                            &format!("Chip conservation violated at hand {}", rec.hand_id),
+                        );
+                    }
+                    if invalid {
+                        continue;
+                    }
+                }
+
+                state.hands += 1;
+                if let Some(r) = rec.result.as_deref() {
+                    if r == "p0" {
+                        state.p0 += 1;
+                    }
+                    if r == "p1" {
+                        state.p1 += 1;
+                    }
+                }
+            }
+        }
+
+        let path = Path::new(input);
+        let mut state = StatsState {
+            hands: 0,
+            p0: 0,
+            p1: 0,
+            skipped: 0,
+            corrupted: 0,
+            stats_ok: true,
+        };
+
+        if path.is_dir() {
+            let mut stack = vec![path.to_path_buf()];
+            while let Some(d) = stack.pop() {
+                let rd = match std::fs::read_dir(&d) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                for entry in rd.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        stack.push(p);
+                        continue;
+                    }
+                    let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    if !(name.ends_with(".jsonl") || name.ends_with(".jsonl.zst")) {
+                        continue;
+                    }
+                    match read_text_auto(p.to_str().unwrap()) {
+                        Ok(s) => consume_stats_content(s, &mut state, err),
+                        Err(e) => {
+                            let _ = ui::write_error(
+                                err,
+                                &format!("Failed to read {}: {}", p.display(), e),
+                            );
+                            state.stats_ok = false;
+                        }
+                    }
+                }
+            }
+        } else {
+            match read_text_auto(input) {
+                Ok(s) => consume_stats_content(s, &mut state, err),
+                Err(e) => {
+                    let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
+                    return 2;
+                }
+            }
+        }
+
+        if state.corrupted > 0 {
+            let _ = ui::write_error(
+                err,
+                &format!("Skipped {} corrupted record(s)", state.corrupted),
+            );
+        }
+        if state.skipped > 0 {
+            let _ = ui::write_error(
+                err,
+                &format!("Discarded {} incomplete final line(s)", state.skipped),
+            );
+        }
+        if !path.is_dir() && state.hands == 0 && (state.corrupted > 0 || state.skipped > 0) {
+            let _ = ui::write_error(err, "Invalid record");
+            return 2;
+        }
+
+        let summary = serde_json::json!({
+            "hands": state.hands,
+            "winners": { "p0": state.p0, "p1": state.p1 },
+        });
+        let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
+        if state.stats_ok {
+            0
+        } else {
+            2
+        }
+    }
     const COMMANDS: &[&str] = &[
         "play", "replay", "stats", "verify", "deal", "bench", "sim", "eval", "export", "dataset",
         "cfg", "doctor", "rng", "serve", "train",
@@ -561,102 +718,7 @@ where
                     }
                 }
             }
-            Commands::Stats { input } => {
-                use std::path::Path;
-                let path = Path::new(&input);
-                let mut hands = 0u64;
-                let mut p0 = 0u64;
-                let mut p1 = 0u64;
-                let mut skipped = 0u64;
-                let mut corrupted = 0u64;
-                let mut process_content = |content: String| {
-                    let has_trailing_nl = content.ends_with('\n');
-                    let lines: Vec<&str> =
-                        content.lines().filter(|l| !l.trim().is_empty()).collect();
-                    for (i, line) in lines.iter().enumerate() {
-                        let rec: axm_engine::logger::HandRecord = match serde_json::from_str(line) {
-                            Ok(v) => v,
-                            Err(_) => {
-                                if i == lines.len() - 1 && !has_trailing_nl {
-                                    skipped += 1;
-                                } else {
-                                    corrupted += 1;
-                                }
-                                continue;
-                            }
-                        };
-                        hands += 1;
-                        if let Some(r) = rec.result.as_deref() {
-                            if r == "p0" {
-                                p0 += 1;
-                            }
-                            if r == "p1" {
-                                p1 += 1;
-                            }
-                        }
-                    }
-                };
-
-                if path.is_dir() {
-                    let mut stack = vec![path.to_path_buf()];
-                    while let Some(d) = stack.pop() {
-                        let rd = match std::fs::read_dir(&d) {
-                            Ok(v) => v,
-                            Err(_) => continue,
-                        };
-                        for entry in rd.flatten() {
-                            let p = entry.path();
-                            if p.is_dir() {
-                                stack.push(p);
-                                continue;
-                            }
-                            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                            if !(name.ends_with(".jsonl") || name.ends_with(".jsonl.zst")) {
-                                continue;
-                            }
-                            match read_text_auto(p.to_str().unwrap()) {
-                                Ok(s) => process_content(s),
-                                Err(e) => {
-                                    let _ = ui::write_error(
-                                        err,
-                                        &format!("Failed to read {}: {}", p.display(), e),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    match read_text_auto(&input) {
-                        Ok(s) => process_content(s),
-                        Err(e) => {
-                            let _ =
-                                ui::write_error(err, &format!("Failed to read {}: {}", input, e));
-                            return 2;
-                        }
-                    }
-                }
-
-                if corrupted > 0 {
-                    let _ =
-                        ui::write_error(err, &format!("Skipped {} corrupted record(s)", corrupted));
-                }
-                if skipped > 0 {
-                    let _ = ui::write_error(
-                        err,
-                        &format!("Discarded {} incomplete final line(s)", skipped),
-                    );
-                }
-                if !path.is_dir() && hands == 0 && (corrupted > 0 || skipped > 0) {
-                    let _ = ui::write_error(err, "Invalid record");
-                    return 2;
-                }
-                let summary = serde_json::json!({
-                    "hands": hands,
-                    "winners": { "p0": p0, "p1": p1 },
-                });
-                let _ = writeln!(out, "{}", serde_json::to_string_pretty(&summary).unwrap());
-                0
-            }
+            Commands::Stats { input } => run_stats(&input, out, err),
             Commands::Verify { input } => {
                 // verify basic rule set covering board completion, chip conservation, and betting rules
                 let mut ok = true;
