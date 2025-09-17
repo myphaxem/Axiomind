@@ -3,6 +3,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+
 #[derive(Debug, Clone)]
 pub struct TempFileManager {
     base_dir: PathBuf,
@@ -11,9 +15,13 @@ pub struct TempFileManager {
 impl TempFileManager {
     pub fn new() -> Result<Self, String> {
         let pid = std::process::id();
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
         let mut base = PathBuf::from("target");
-        base.push(format!("ds_{}_{}", pid, ts));
+        base.push(format!("ds_{}_{}_{}", pid, ts, unique));
         fs::create_dir_all(&base).map_err(|e| format!("create_dir_all: {}", e))?;
         Ok(Self { base_dir: base })
     }
