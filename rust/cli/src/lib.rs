@@ -748,6 +748,7 @@ where
                 hands,
                 output,
                 seed,
+                level,
                 resume,
             } => {
                 let total: usize = hands as usize;
@@ -755,6 +756,7 @@ where
                     let _ = ui::write_error(err, "hands must be >= 1");
                     return 2;
                 }
+                let level = level.unwrap_or(1);
                 let mut completed = 0usize;
                 let mut path = None;
                 if let Some(outp) = output.clone() {
@@ -789,14 +791,14 @@ where
                     let _ = writeln!(out, "Resumed from {}", completed);
                 }
                 let base_seed = seed.unwrap_or_else(|| rand::random());
-                let mut eng = Engine::new(Some(base_seed), 1);
+                let mut eng = Engine::new(Some(base_seed), level);
                 eng.shuffle();
                 let break_after = std::env::var("AXM_SIM_BREAK_AFTER")
                     .ok()
                     .and_then(|v| v.parse::<usize>().ok());
                 for i in completed..total {
                     // create a fresh engine per hand to avoid residual hole cards
-                    let mut e = Engine::new(Some(base_seed + i as u64), 1);
+                    let mut e = Engine::new(Some(base_seed + i as u64), level);
                     e.shuffle();
                     let _ = e.deal_hand();
                     if let Some(p) = &path {
@@ -810,6 +812,7 @@ where
                         let rec = serde_json::json!({
                             "hand_id": hand_id,
                             "seed": seed,
+                            "level": level,
                             "actions": [],
                             "board": board,
                             "result": null,
@@ -1005,6 +1008,8 @@ enum Commands {
         output: Option<String>,
         #[arg(long)]
         seed: Option<u64>,
+        #[arg(long)]
+        level: Option<u8>,
         #[arg(long)]
         resume: Option<String>,
     },

@@ -51,7 +51,7 @@
   - Test BTN/BB dealing order and burn card placement
   - _Requirements: 4.4, 4.5, 4.6_
 
-- [ ] 4.3 Create deterministic behavior tests
+- [x] 4.3 Create deterministic behavior tests
   - Verify identical output with same --seed and --level parameters
   - Test reproducible evaluation results with fixed seeds
   - _Requirements: 5.1, 5.2_
