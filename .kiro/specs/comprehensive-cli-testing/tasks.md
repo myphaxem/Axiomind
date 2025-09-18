@@ -100,8 +100,8 @@
   - Test export format validation and error handling
   - _Requirements: 8.2_
 
-- [ ] 8. Implement dataset management tests (H-series)
-- [ ] 8.1 Create dataset splitting validation tests
+- [x] 8. Implement dataset management tests (H-series)
+- [x] 8.1 Create dataset splitting validation tests
   - Test split percentage validation (must sum to 100%)
   - Verify boundary cases (99/1/0 splits)
   - Test deterministic splitting with --seed parameter
