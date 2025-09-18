@@ -98,3 +98,140 @@ fn dataset_default_split() {
     let t = fs::read_to_string(outdir.join("train.jsonl")).unwrap();
     assert!(t.lines().count() >= 3); // 80%
 }
+
+#[test]
+fn dataset_rejects_invalid_percentages() {
+    let input = mk_jsonl("dataset_bad_pct", 4);
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let outdir = PathBuf::from("target").join(format!("ds_bad_{}", std::process::id()));
+    let code = run(
+        [
+            "axm",
+            "dataset",
+            "--input",
+            input.to_string_lossy().as_ref(),
+            "--outdir",
+            outdir.to_string_lossy().as_ref(),
+            "--train",
+            "60",
+            "--val",
+            "20",
+            "--test",
+            "30",
+        ],
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(code, 2);
+    let err_str = String::from_utf8(err).unwrap();
+    assert!(
+        err_str.contains("Splits must sum to 100%"),
+        "unexpected stderr: {}",
+        err_str
+    );
+}
+
+#[test]
+fn dataset_accepts_percentage_inputs() {
+    let input = mk_jsonl("dataset_pct", 10);
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let outdir = PathBuf::from("target").join(format!("ds_pct_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&outdir);
+    let code = run(
+        [
+            "axm",
+            "dataset",
+            "--input",
+            input.to_string_lossy().as_ref(),
+            "--outdir",
+            outdir.to_string_lossy().as_ref(),
+            "--train",
+            "70",
+            "--val",
+            "20",
+            "--test",
+            "10",
+            "--seed",
+            "42",
+        ],
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(code, 0, "stderr: {}", String::from_utf8_lossy(&err));
+    let train = fs::read_to_string(outdir.join("train.jsonl")).unwrap();
+    let val = fs::read_to_string(outdir.join("val.jsonl")).unwrap();
+    let test = fs::read_to_string(outdir.join("test.jsonl")).unwrap();
+    assert_eq!(train.lines().count(), 7);
+    assert_eq!(val.lines().count(), 2);
+    assert_eq!(test.lines().count(), 1);
+}
+
+#[test]
+fn dataset_seed_produces_stable_splits() {
+    let input = mk_jsonl("dataset_seed", 12);
+    let outdir_a = PathBuf::from("target").join(format!("ds_seed_a_{}", std::process::id()));
+    let outdir_b = PathBuf::from("target").join(format!("ds_seed_b_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&outdir_a);
+    let _ = fs::remove_dir_all(&outdir_b);
+
+    let mut out_a = Vec::new();
+    let mut err_a = Vec::new();
+    let code_a = run(
+        [
+            "axm",
+            "dataset",
+            "--input",
+            input.to_string_lossy().as_ref(),
+            "--outdir",
+            outdir_a.to_string_lossy().as_ref(),
+            "--train",
+            "0.8",
+            "--val",
+            "0.1",
+            "--test",
+            "0.1",
+            "--seed",
+            "99",
+        ],
+        &mut out_a,
+        &mut err_a,
+    );
+    assert_eq!(code_a, 0, "stderr: {}", String::from_utf8_lossy(&err_a));
+
+    let mut out_b = Vec::new();
+    let mut err_b = Vec::new();
+    let code_b = run(
+        [
+            "axm",
+            "dataset",
+            "--input",
+            input.to_string_lossy().as_ref(),
+            "--outdir",
+            outdir_b.to_string_lossy().as_ref(),
+            "--train",
+            "0.8",
+            "--val",
+            "0.1",
+            "--test",
+            "0.1",
+            "--seed",
+            "99",
+        ],
+        &mut out_b,
+        &mut err_b,
+    );
+    assert_eq!(code_b, 0, "stderr: {}", String::from_utf8_lossy(&err_b));
+
+    let tr_a = fs::read_to_string(outdir_a.join("train.jsonl")).unwrap();
+    let tr_b = fs::read_to_string(outdir_b.join("train.jsonl")).unwrap();
+    let va_a = fs::read_to_string(outdir_a.join("val.jsonl")).unwrap();
+    let va_b = fs::read_to_string(outdir_b.join("val.jsonl")).unwrap();
+    let te_a = fs::read_to_string(outdir_a.join("test.jsonl")).unwrap();
+    let te_b = fs::read_to_string(outdir_b.join("test.jsonl")).unwrap();
+
+    assert_eq!(tr_a, tr_b, "train split mismatch");
+    assert_eq!(va_a, va_b, "val split mismatch");
+    assert_eq!(te_a, te_b, "test split mismatch");
+}
