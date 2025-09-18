@@ -420,6 +420,30 @@ where
         Ok(())
     }
 
+    fn compute_splits(
+        train: Option<f64>,
+        val: Option<f64>,
+        test: Option<f64>,
+    ) -> Result<[f64; 3], String> {
+        const DEFAULTS: [f64; 3] = [0.8, 0.1, 0.1];
+        let mut splits = [0.0; 3];
+        for (idx, opt) in [train, val, test].into_iter().enumerate() {
+            splits[idx] = match opt {
+                Some(v) if v.is_sign_negative() => {
+                    return Err("Splits must be non-negative".into());
+                }
+                Some(v) if v > 1.0 + 1e-6 => v / 100.0,
+                Some(v) => v,
+                None => DEFAULTS[idx],
+            };
+        }
+        let sum: f64 = splits.iter().sum();
+        if (sum - 1.0).abs() > 1e-6 {
+            return Err("Splits must sum to 100% (1.0 total)".into());
+        }
+        Ok(splits)
+    }
+
     fn run_stats(input: &str, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         use std::path::Path;
 
@@ -1277,12 +1301,19 @@ where
                     let _ = ui::write_error(err, "Empty input");
                     return 2;
                 }
-                let tr = train.unwrap_or(0.8);
-                let va = val.unwrap_or(0.1);
-                let te = test.unwrap_or(0.1);
+                let splits = match compute_splits(train, val, test) {
+                    Ok(v) => v,
+                    Err(msg) => {
+                        let _ = ui::write_error(err, &msg);
+                        return 2;
+                    }
+                };
+                let tr = splits[0];
+                let va = splits[1];
+                let te = splits[2];
                 let sum = tr + va + te;
                 if (sum - 1.0).abs() > 1e-6 {
-                    let _ = ui::write_error(err, "Splits must sum to 1.0");
+                    let _ = ui::write_error(err, "Splits must sum to 100% (1.0 total)");
                     return 2;
                 }
                 let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed.unwrap_or(0));
