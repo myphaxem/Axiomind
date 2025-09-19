@@ -13,6 +13,7 @@ fn p(name: &str, ext: &str) -> PathBuf {
 fn e2e_sim_stats_replay_export_verify() {
     // 1) simulate
     let out_jsonl = p("wf_sim", "jsonl");
+    let _ = fs::remove_file(&out_jsonl);
     let mut out = Vec::new();
     let mut err = Vec::new();
     let code = run(
@@ -74,6 +75,7 @@ fn e2e_sim_stats_replay_export_verify() {
 
     // 4) export json
     let out_json = p("wf_exp", "json");
+    let _ = fs::remove_file(&out_json);
     out.clear();
     err.clear();
     let code = run(

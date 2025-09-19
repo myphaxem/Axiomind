@@ -10,6 +10,41 @@ pub struct Config {
     pub ai_version: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ValueSource {
+    Default,
+    File,
+    Env,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigSources {
+    pub starting_stack: ValueSource,
+    pub level: ValueSource,
+    pub seed: ValueSource,
+    pub adaptive: ValueSource,
+    pub ai_version: ValueSource,
+}
+
+impl Default for ConfigSources {
+    fn default() -> Self {
+        Self {
+            starting_stack: ValueSource::Default,
+            level: ValueSource::Default,
+            seed: ValueSource::Default,
+            adaptive: ValueSource::Default,
+            ai_version: ValueSource::Default,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigResolved {
+    pub config: Config,
+    pub sources: ConfigSources,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -46,25 +81,38 @@ impl std::fmt::Display for ConfigError {
     }
 }
 
+#[allow(dead_code)]
+
 pub fn load() -> Result<Config, ConfigError> {
+    load_with_sources().map(|resolved| resolved.config)
+}
+
+pub fn load_with_sources() -> Result<ConfigResolved, ConfigError> {
     let mut cfg = Config::default();
+    let mut sources = ConfigSources::default();
+
     if let Ok(path) = std::env::var("AXM_CONFIG") {
         let s = fs::read_to_string(path)?;
         let f: FileConfig = toml::from_str(&s)?;
         if let Some(v) = f.starting_stack {
             cfg.starting_stack = v;
+            sources.starting_stack = ValueSource::File;
         }
         if let Some(v) = f.level {
             cfg.level = v;
+            sources.level = ValueSource::File;
         }
         if let Some(v) = f.seed {
             cfg.seed = Some(v);
+            sources.seed = ValueSource::File;
         }
         if let Some(v) = f.adaptive {
             cfg.adaptive = v;
+            sources.adaptive = ValueSource::File;
         }
         if let Some(v) = f.ai_version {
             cfg.ai_version = v;
+            sources.ai_version = ValueSource::File;
         }
     }
 
@@ -74,6 +122,7 @@ pub fn load() -> Result<Config, ConfigError> {
                 seed.parse()
                     .map_err(|_| ConfigError::Invalid("Invalid seed".into()))?,
             );
+            sources.seed = ValueSource::Env;
         }
     }
     if let Ok(level) = std::env::var("AXM_LEVEL") {
@@ -81,22 +130,28 @@ pub fn load() -> Result<Config, ConfigError> {
             cfg.level = level
                 .parse()
                 .map_err(|_| ConfigError::Invalid("Invalid level".into()))?;
+            sources.level = ValueSource::Env;
         }
     }
     if let Ok(adap) = std::env::var("AXM_ADAPTIVE") {
         if !adap.is_empty() {
             cfg.adaptive =
                 parse_bool(&adap).ok_or_else(|| ConfigError::Invalid("Invalid adaptive".into()))?;
+            sources.adaptive = ValueSource::Env;
         }
     }
     if let Ok(ver) = std::env::var("AXM_AI_VERSION") {
         if !ver.is_empty() {
             cfg.ai_version = ver;
+            sources.ai_version = ValueSource::Env;
         }
     }
 
     validate(&cfg)?;
-    Ok(cfg)
+    Ok(ConfigResolved {
+        config: cfg,
+        sources,
+    })
 }
 
 #[derive(Debug, Deserialize)]

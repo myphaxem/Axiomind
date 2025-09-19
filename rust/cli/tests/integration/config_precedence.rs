@@ -1,29 +1,45 @@
 use crate::helpers::cli_runner::CliRunner;
 use crate::helpers::temp_files::TempFileManager;
 
+use serde_json::Value;
+use std::sync::{Mutex, OnceLock};
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 #[test]
 fn i1_cfg_shows_defaults_for_adaptive_and_ai_version() {
+    let _guard = env_lock().lock().unwrap();
     std::env::remove_var("AXM_CONFIG");
     std::env::remove_var("AXM_ADAPTIVE");
     std::env::remove_var("AXM_AI_VERSION");
+    std::env::remove_var("AXM_SEED");
+    std::env::remove_var("AXM_LEVEL");
+
     let cli = CliRunner::new().expect("init");
     let res = cli.run(&["cfg"]);
     assert_eq!(res.exit_code, 0);
-    let out = res.stdout;
-    assert!(
-        out.contains("\"adaptive\": true"),
-        "defaults should set adaptive=true: {}",
-        out
-    );
-    assert!(
-        out.contains("\"ai_version\": \"latest\""),
-        "defaults should set ai_version=latest: {}",
-        out
-    );
+    let json: Value = serde_json::from_str(&res.stdout).unwrap();
+
+    let adaptive = &json["adaptive"];
+    assert_eq!(adaptive["value"].as_bool(), Some(true));
+    assert_eq!(adaptive["source"].as_str(), Some("default"));
+
+    let ai_version = &json["ai_version"];
+    assert_eq!(ai_version["value"].as_str(), Some("latest"));
+    assert_eq!(ai_version["source"].as_str(), Some("default"));
 }
 
 #[test]
 fn i2_precedence_cli_over_env_over_file_for_seed_and_ai() {
+    let _guard = env_lock().lock().unwrap();
+    std::env::remove_var("AXM_CONFIG");
+    std::env::remove_var("AXM_SEED");
+    std::env::remove_var("AXM_AI_VERSION");
+    std::env::remove_var("AXM_ADAPTIVE");
+
     let tfm = TempFileManager::new().unwrap();
     let cfg_path = tfm
         .create_file(
@@ -32,24 +48,31 @@ fn i2_precedence_cli_over_env_over_file_for_seed_and_ai() {
         )
         .unwrap();
     std::env::set_var("AXM_CONFIG", &cfg_path);
-    // First, file-only precedence
+
     let cli = CliRunner::new().expect("init");
     let cfg1 = cli.run(&["cfg"]);
     assert_eq!(cfg1.exit_code, 0);
-    assert!(cfg1.stdout.contains("\"seed\": 456"));
-    assert!(cfg1.stdout.contains("\"ai_version\": \"v1\""));
-    assert!(cfg1.stdout.contains("\"adaptive\": false"));
+    let json1: Value = serde_json::from_str(&cfg1.stdout).unwrap();
+    assert_eq!(json1["seed"]["value"].as_u64(), Some(456));
+    assert_eq!(json1["seed"]["source"].as_str(), Some("file"));
+    assert_eq!(json1["ai_version"]["value"].as_str(), Some("v1"));
+    assert_eq!(json1["ai_version"]["source"].as_str(), Some("file"));
+    assert_eq!(json1["adaptive"]["value"].as_bool(), Some(false));
+    assert_eq!(json1["adaptive"]["source"].as_str(), Some("file"));
 
-    // Next, env overrides file
     std::env::set_var("AXM_SEED", "123");
     std::env::set_var("AXM_AI_VERSION", "v2");
     std::env::set_var("AXM_ADAPTIVE", "on");
     let cfg2 = cli.run(&["cfg"]);
-    assert!(cfg2.stdout.contains("\"seed\": 123"));
-    assert!(cfg2.stdout.contains("\"ai_version\": \"v2\""));
-    assert!(cfg2.stdout.contains("\"adaptive\": true"));
+    assert_eq!(cfg2.exit_code, 0);
+    let json2: Value = serde_json::from_str(&cfg2.stdout).unwrap();
+    assert_eq!(json2["seed"]["value"].as_u64(), Some(123));
+    assert_eq!(json2["seed"]["source"].as_str(), Some("env"));
+    assert_eq!(json2["ai_version"]["value"].as_str(), Some("v2"));
+    assert_eq!(json2["ai_version"]["source"].as_str(), Some("env"));
+    assert_eq!(json2["adaptive"]["value"].as_bool(), Some(true));
+    assert_eq!(json2["adaptive"]["source"].as_str(), Some("env"));
 
-    // Finally, CLI (rng --seed) overrides env for seed determinism
     let r1 = cli.run(&["rng", "--seed", "42"]);
     let r2 = cli.run(&["rng", "--seed", "42"]);
     assert_eq!(

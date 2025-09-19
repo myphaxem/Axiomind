@@ -759,9 +759,32 @@ where
             2
         }
         Ok(cli) => match cli.cmd {
-            Commands::Cfg => match config::load() {
-                Ok(c) => {
-                    let _ = writeln!(out, "{}", serde_json::to_string_pretty(&c).unwrap());
+            Commands::Cfg => match config::load_with_sources() {
+                Ok(resolved) => {
+                    let config::ConfigResolved { config, sources } = resolved;
+                    let display = serde_json::json!({
+                        "starting_stack": {
+                            "value": config.starting_stack,
+                            "source": sources.starting_stack,
+                        },
+                        "level": {
+                            "value": config.level,
+                            "source": sources.level,
+                        },
+                        "seed": {
+                            "value": config.seed,
+                            "source": sources.seed,
+                        },
+                        "adaptive": {
+                            "value": config.adaptive,
+                            "source": sources.adaptive,
+                        },
+                        "ai_version": {
+                            "value": config.ai_version,
+                            "source": sources.ai_version,
+                        }
+                    });
+                    let _ = writeln!(out, "{}", serde_json::to_string_pretty(&display).unwrap());
                     0
                 }
                 Err(e) => {
