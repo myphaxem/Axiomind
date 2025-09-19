@@ -23,11 +23,30 @@ fn help_lists_expected_commands() {
 fn cfg_shows_default_settings() {
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
-    // Expectation: `axm cfg` prints defaults including starting_stack=20000 and level=1
-    let _code = run(["axm", "cfg"], &mut out, &mut err);
-    let stdout = String::from_utf8_lossy(&out);
-    assert!(stdout.contains("\"starting_stack\": 20000"));
-    assert!(stdout.contains("\"level\": 1"));
+
+    let code = run(["axm", "cfg"], &mut out, &mut err);
+    assert_eq!(code, 0, "stderr: {}", String::from_utf8_lossy(&err));
+
+    let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    let stack = &json["starting_stack"];
+    assert_eq!(stack["value"].as_u64(), Some(20_000));
+    assert_eq!(stack["source"].as_str(), Some("default"));
+
+    let level = &json["level"];
+    assert_eq!(level["value"].as_u64(), Some(1));
+    assert_eq!(level["source"].as_str(), Some("default"));
+
+    let seed = &json["seed"];
+    assert!(seed["value"].is_null());
+    assert_eq!(seed["source"].as_str(), Some("default"));
+
+    let adaptive = &json["adaptive"];
+    assert_eq!(adaptive["value"].as_bool(), Some(true));
+    assert_eq!(adaptive["source"].as_str(), Some("default"));
+
+    let ai_version = &json["ai_version"];
+    assert_eq!(ai_version["value"].as_str(), Some("latest"));
+    assert_eq!(ai_version["source"].as_str(), Some("default"));
 }
 
 #[test]
@@ -59,25 +78,45 @@ fn invalid_vs_value_shows_error() {
 fn cfg_reads_env_and_file_with_validation() {
     use std::fs;
     use std::path::PathBuf;
-    // Prepare config file
+
     let mut p = PathBuf::from("target");
     p.push(format!("axm_cfg_{}.toml", std::process::id()));
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent).unwrap();
     }
-    fs::write(&p, "seed = 456\nlevel = 3\n").unwrap();
+    fs::write(
+        &p,
+        "starting_stack = 25000\nlevel = 3\nadaptive = false\nai_version = \"v1\"\nseed = 456\n",
+    )
+    .unwrap();
+
     std::env::set_var("AXM_CONFIG", &p);
-    std::env::set_var("AXM_SEED", "123"); // env should override file
+    std::env::set_var("AXM_SEED", "123");
+    std::env::set_var("AXM_LEVEL", "4");
+    std::env::set_var("AXM_ADAPTIVE", "on");
+    std::env::set_var("AXM_AI_VERSION", "v2");
 
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
     let code = run(["axm", "cfg"], &mut out, &mut err);
-    assert_eq!(code, 0);
-    let stdout = String::from_utf8_lossy(&out);
-    assert!(stdout.contains("\"seed\": 123"));
-    assert!(stdout.contains("\"level\": 3"));
+    assert_eq!(code, 0, "stderr: {}", String::from_utf8_lossy(&err));
+    let stdout = serde_json::from_slice::<serde_json::Value>(&out).unwrap();
 
-    // invalid level -> non-zero and error message
+    assert_eq!(stdout["starting_stack"]["value"].as_u64(), Some(25_000));
+    assert_eq!(stdout["starting_stack"]["source"].as_str(), Some("file"));
+
+    assert_eq!(stdout["level"]["value"].as_u64(), Some(4));
+    assert_eq!(stdout["level"]["source"].as_str(), Some("env"));
+
+    assert_eq!(stdout["seed"]["value"].as_u64(), Some(123));
+    assert_eq!(stdout["seed"]["source"].as_str(), Some("env"));
+
+    assert_eq!(stdout["adaptive"]["value"].as_bool(), Some(true));
+    assert_eq!(stdout["adaptive"]["source"].as_str(), Some("env"));
+
+    assert_eq!(stdout["ai_version"]["value"].as_str(), Some("v2"));
+    assert_eq!(stdout["ai_version"]["source"].as_str(), Some("env"));
+
     std::env::set_var("AXM_LEVEL", "0");
     let mut out2: Vec<u8> = Vec::new();
     let mut err2: Vec<u8> = Vec::new();
@@ -89,4 +128,7 @@ fn cfg_reads_env_and_file_with_validation() {
     std::env::remove_var("AXM_CONFIG");
     std::env::remove_var("AXM_SEED");
     std::env::remove_var("AXM_LEVEL");
+    std::env::remove_var("AXM_ADAPTIVE");
+    std::env::remove_var("AXM_AI_VERSION");
+    let _ = fs::remove_file(&p);
 }
