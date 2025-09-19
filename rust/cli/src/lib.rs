@@ -1308,11 +1308,89 @@ where
                                     game_over = true;
                                 }
                             }
-                            match serde_json::from_value::<axm_engine::logger::HandRecord>(v) {
+                            match serde_json::from_value::<axm_engine::logger::HandRecord>(
+                                v.clone(),
+                            ) {
                                 Ok(rec) => {
                                     if rec.board.len() != 5 {
                                         ok = false;
+                                        let _ = ui::write_error(
+                                            err,
+                                            &format!(
+                                                "Invalid board length at hand {}: expected 5 cards but found {}",
+                                                hands,
+                                                rec.board.len()
+                                            ),
+                                        );
                                     }
+
+                                    let mut seen_cards: HashSet<axm_engine::cards::Card> =
+                                        HashSet::new();
+                                    let mut duplicate_cards: HashSet<axm_engine::cards::Card> =
+                                        HashSet::new();
+                                    {
+                                        let mut record_card = |card: axm_engine::cards::Card| {
+                                            if !seen_cards.insert(card) {
+                                                duplicate_cards.insert(card);
+                                            }
+                                        };
+                                        for card in &rec.board {
+                                            record_card(*card);
+                                        }
+                                        if let Some(players) =
+                                            v.get("players").and_then(|p| p.as_array())
+                                        {
+                                            for player in players {
+                                                let pid = player
+                                                    .get("id")
+                                                    .and_then(|x| x.as_str())
+                                                    .unwrap_or("unknown");
+                                                if let Some(hole_cards) = player
+                                                    .get("hole_cards")
+                                                    .and_then(|h| h.as_array())
+                                                {
+                                                    for card_val in hole_cards {
+                                                        match serde_json::from_value::<
+                                                            axm_engine::cards::Card,
+                                                        >(
+                                                            card_val.clone()
+                                                        ) {
+                                                            Ok(card) => record_card(card),
+                                                            Err(_) => {
+                                                                ok = false;
+                                                                let _ = ui::write_error(
+                                                                    err,
+                                                                    &format!(
+                                                                        "Invalid card specification for {} at hand {}",
+                                                                        pid,
+                                                                        hands
+                                                                    ),
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if !duplicate_cards.is_empty() {
+                                        ok = false;
+                                        let mut cards: Vec<String> = duplicate_cards
+                                            .iter()
+                                            .map(|card| format!("{:?} {:?}", card.rank, card.suit))
+                                            .collect();
+                                        cards.sort();
+                                        let _ = ui::write_error(
+                                            err,
+                                            &format!(
+                                                "Duplicate card(s) detected at hand {}: {}",
+                                                hands,
+                                                cards.join(", ")
+                                            ),
+                                        );
+                                    }
+
                                     if !valid_id(&rec.hand_id) {
                                         ok = false;
                                         let _ = ui::write_error(err, "Invalid hand_id");

@@ -572,3 +572,187 @@ fn j6_doctor_reports_locale_error() {
         res.stderr
     );
 }
+
+#[test]
+fn j7_rng_with_seed_is_deterministic() {
+    let cli = CliRunner::new().expect("cli runner");
+    let first = cli.run(&["rng", "--seed", "42"]);
+    assert_eq!(first.exit_code, 0, "first rng run failed: {}", first.stderr);
+    let second = cli.run(&["rng", "--seed", "42"]);
+    assert_eq!(
+        second.exit_code, 0,
+        "second rng run failed: {}",
+        second.stderr
+    );
+
+    let first_out = first.stdout.clone();
+    let second_out = second.stdout.clone();
+    assert_eq!(
+        first_out, second_out,
+        "same seed should produce identical RNG output"
+    );
+    assert!(first_out.contains("RNG sample:"), "stdout: {}", first_out);
+    assert!(first.stderr.is_empty(), "stderr: {}", first.stderr);
+    assert!(second.stderr.is_empty(), "stderr: {}", second.stderr);
+}
+
+#[test]
+fn j8_verify_rejects_duplicate_cards() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000012",
+        "seed": 12,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {
+                "id": "p0",
+                "stack_start": 1000,
+                "hole_cards": [
+                    {"rank": "Ace", "suit": "Clubs"},
+                    {"rank": "King", "suit": "Diamonds"}
+                ]
+            },
+            {
+                "id": "p1",
+                "stack_start": 1000,
+                "hole_cards": [
+                    {"rank": "Queen", "suit": "Spades"},
+                    {"rank": "Jack", "suit": "Hearts"}
+                ]
+            }
+        ],
+        "actions": [],
+        "board": [
+            {"rank": "Ace", "suit": "Hearts"},
+            {"rank": "Ace", "suit": "Hearts"},
+            {"rank": "Queen", "suit": "Clubs"},
+            {"rank": "Jack", "suit": "Spades"},
+            {"rank": "Ten", "suit": "Diamonds"}
+        ],
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T00:40:00Z"
+    });
+    let path = write_records(&tfm, "duplicate_cards.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when duplicate cards appear"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("duplicate"),
+        "stderr: {}",
+        res.stderr
+    );
+    assert!(
+        res.stdout.to_lowercase().contains("fail"),
+        "stdout: {}",
+        res.stdout
+    );
+}
+
+#[test]
+fn j9_verify_rejects_incorrect_burn_positions() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000013",
+        "seed": 13,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 8, 11]
+        },
+        "ts": "2025-01-01T00:50:00Z"
+    });
+    let path = write_records(&tfm, "bad_burn_positions.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when burn positions do not match expected"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("burn"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn j10_verify_rejects_short_board() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000014",
+        "seed": 14,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [],
+        "board": [
+            {"rank": "Ace", "suit": "Hearts"},
+            {"rank": "King", "suit": "Diamonds"},
+            {"rank": "Queen", "suit": "Spades"},
+            {"rank": "Jack", "suit": "Clubs"}
+        ],
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T01:00:00Z"
+    });
+    let path = write_records(&tfm, "short_board.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when board has fewer than five cards"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("board"),
+        "stderr: {}",
+        res.stderr
+    );
+    assert!(
+        res.stdout.to_lowercase().contains("fail"),
+        "stdout: {}",
+        res.stdout
+    );
+}

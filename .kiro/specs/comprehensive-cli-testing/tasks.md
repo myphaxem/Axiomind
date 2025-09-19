@@ -114,7 +114,7 @@
   - Test configuration precedence integration
   - _Requirements: 10.1, 10.2_
 
-- [ ] 10. Implement verification and diagnostic tests (J-series)
+- [x] 10. Implement verification and diagnostic tests (J-series)
 - [x] 10.1 Create rule verification tests
   - Test hand evaluation antisymmetry: compare(a,b) = -compare(b,a)
   - Verify evaluation idempotency (same hand evaluated twice)
@@ -127,7 +127,7 @@
   - Test UTF-8 locale confirmation
   - _Requirements: 11.4_
 
-- [ ] 10.3 Create RNG and dealing tests
+- [x] 10.3 Create RNG and dealing tests
   - Test deterministic RNG output with --seed
   - Verify non-deterministic behavior without seed
   - Test card dealing validation (52 unique cards, proper burn positions, 5 board cards)
