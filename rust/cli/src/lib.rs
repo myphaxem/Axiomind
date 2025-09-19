@@ -56,6 +56,15 @@ fn ensure_no_reopen_after_short_all_in(
             continue;
         };
 
+        if !starting_stacks.contains_key(&player_id) {
+            return Err(format!(
+                "Unknown player {} at hand {} (action #{})",
+                player_id,
+                hand_index,
+                idx + 1
+            ));
+        }
+
         if let Some(street) = act.get("street").and_then(|s| s.as_str()) {
             if prev_street.as_deref() != Some(street) {
                 prev_street = Some(street.to_string());
@@ -964,6 +973,22 @@ where
                                 }
                                 starting_stacks = Some(start_map.clone());
                                 stacks_after_hand = start_map;
+                                if let Some(nr_obj) =
+                                    v.get("net_result").and_then(|x| x.as_object())
+                                {
+                                    for id in nr_obj.keys() {
+                                        if !stacks_after_hand.contains_key(id) {
+                                            ok = false;
+                                            let _ = ui::write_error(
+                                                err,
+                                                &format!(
+                                                    "Unknown player {} in net_result at hand {}",
+                                                    id, hands
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
                             }
                             if let (Some(ref start_map), Some(meta_obj)) = (
                                 starting_stacks.as_ref(),

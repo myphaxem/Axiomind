@@ -115,7 +115,7 @@
   - _Requirements: 10.1, 10.2_
 
 - [ ] 10. Implement verification and diagnostic tests (J-series)
-- [ ] 10.1 Create rule verification tests
+- [x] 10.1 Create rule verification tests
   - Test hand evaluation antisymmetry: compare(a,b) = -compare(b,a)
   - Verify evaluation idempotency (same hand evaluated twice)
   - Test side pot distribution conservation
