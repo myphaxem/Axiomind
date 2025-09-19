@@ -2,6 +2,10 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use std::sync::Mutex;
+
+pub static DOCTOR_LOCK: Mutex<()> = Mutex::new(());
+
 #[derive(Debug, Clone)]
 pub struct CliRunner {
     mode: RunMode,
@@ -19,6 +23,34 @@ pub struct CliResult {
     pub stdout: String,
     pub stderr: String,
     pub duration: Duration,
+}
+
+struct EnvGuard {
+    restores: Vec<(String, Option<String>)>,
+}
+
+impl EnvGuard {
+    fn apply(pairs: &[(&str, &str)]) -> Self {
+        let mut restores = Vec::new();
+        for (key, value) in pairs {
+            let key_owned = key.to_string();
+            let previous = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            restores.push((key_owned, previous));
+        }
+        EnvGuard { restores }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        for (key, previous) in self.restores.iter().rev() {
+            match previous {
+                Some(val) => std::env::set_var(key, val),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
 }
 
 impl CliRunner {
@@ -133,6 +165,7 @@ impl CliRunner {
             }
             RunMode::Library => {
                 use std::io::Write as _;
+                let _guard = EnvGuard::apply(env);
                 let mut out: Vec<u8> = Vec::new();
                 let mut err: Vec<u8> = Vec::new();
                 let start = Instant::now();

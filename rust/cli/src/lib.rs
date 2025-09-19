@@ -731,6 +731,261 @@ where
 
         0
     }
+
+    fn run_doctor(out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+        use std::env;
+        use std::path::{Path, PathBuf};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        struct DoctorCheck {
+            name: &'static str,
+            ok: bool,
+            detail: String,
+            error: Option<String>,
+        }
+
+        impl DoctorCheck {
+            fn ok(name: &'static str, detail: impl Into<String>) -> Self {
+                DoctorCheck {
+                    name,
+                    ok: true,
+                    detail: detail.into(),
+                    error: None,
+                }
+            }
+
+            fn fail(
+                name: &'static str,
+                detail: impl Into<String>,
+                error: impl Into<String>,
+            ) -> Self {
+                DoctorCheck {
+                    name,
+                    ok: false,
+                    detail: detail.into(),
+                    error: Some(error.into()),
+                }
+            }
+
+            fn to_value(&self) -> serde_json::Value {
+                let mut map = serde_json::Map::new();
+                map.insert(
+                    "status".into(),
+                    serde_json::Value::String(if self.ok { "ok" } else { "fail" }.into()),
+                );
+                map.insert(
+                    "detail".into(),
+                    serde_json::Value::String(self.detail.clone()),
+                );
+                if let Some(err) = &self.error {
+                    map.insert("error".into(), serde_json::Value::String(err.clone()));
+                }
+                serde_json::Value::Object(map)
+            }
+        }
+
+        fn unique_suffix() -> u128 {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_micros()
+        }
+
+        fn check_sqlite(dir: &Path) -> DoctorCheck {
+            if !dir.exists() {
+                return DoctorCheck::fail(
+                    "sqlite",
+                    format!("SQLite check looked for {}", dir.display()),
+                    format!(
+                        "SQLite check failed: directory {} does not exist",
+                        dir.display()
+                    ),
+                );
+            }
+            if !dir.is_dir() {
+                return DoctorCheck::fail(
+                    "sqlite",
+                    format!("SQLite check attempted in {}", dir.display()),
+                    format!("SQLite check failed: {} is not a directory", dir.display()),
+                );
+            }
+            let candidate = dir.join(format!("axm-doctor-{}.sqlite", unique_suffix()));
+            match rusqlite::Connection::open(&candidate) {
+                Ok(conn) => {
+                    let pragma = conn.execute("PRAGMA user_version = 1", []);
+                    drop(conn);
+                    if pragma.is_err() {
+                        let _ = std::fs::remove_file(&candidate);
+                        return DoctorCheck::fail(
+                            "sqlite",
+                            format!("SQLite write attempt in {}", dir.display()),
+                            format!(
+                                "SQLite check failed: unable to write to {}",
+                                candidate.display()
+                            ),
+                        );
+                    }
+                    let _ = std::fs::remove_file(&candidate);
+                    DoctorCheck::ok(
+                        "sqlite",
+                        format!("SQLite write test passed in {}", dir.display()),
+                    )
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&candidate);
+                    DoctorCheck::fail(
+                        "sqlite",
+                        format!("SQLite write attempt in {}", dir.display()),
+                        format!("SQLite check failed: {}", e),
+                    )
+                }
+            }
+        }
+
+        fn check_data_dir(path: &Path) -> DoctorCheck {
+            if !path.exists() {
+                return DoctorCheck::fail(
+                    "data_dir",
+                    format!("Data directory probe at {}", path.display()),
+                    format!(
+                        "Data directory check failed: {} does not exist",
+                        path.display()
+                    ),
+                );
+            }
+            if !path.is_dir() {
+                return DoctorCheck::fail(
+                    "data_dir",
+                    format!("Data directory probe at {}", path.display()),
+                    format!(
+                        "Data directory check failed: {} is not a directory",
+                        path.display()
+                    ),
+                );
+            }
+            let probe = path.join("axm-doctor-write.tmp");
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&probe)
+            {
+                Ok(mut file) => {
+                    if let Err(e) = file.write_all(b"ok") {
+                        let _ = std::fs::remove_file(&probe);
+                        return DoctorCheck::fail(
+                            "data_dir",
+                            format!("Data directory write attempt in {}", path.display()),
+                            format!("Data directory check failed: {}", e),
+                        );
+                    }
+                    drop(file);
+                    let _ = std::fs::remove_file(&probe);
+                    DoctorCheck::ok(
+                        "data_dir",
+                        format!("Data directory '{}' is writable", path.display()),
+                    )
+                }
+                Err(e) => DoctorCheck::fail(
+                    "data_dir",
+                    format!("Data directory write attempt in {}", path.display()),
+                    format!("Data directory check failed: {}", e),
+                ),
+            }
+        }
+
+        fn evaluate_locale(source: &str, value: String) -> DoctorCheck {
+            let lowered = value.to_ascii_lowercase();
+            let display = value.clone();
+            if lowered.contains("utf-8") || lowered.contains("utf8") {
+                DoctorCheck::ok(
+                    "locale",
+                    format!("{} reports UTF-8 locale ({})", source, display),
+                )
+            } else {
+                DoctorCheck::fail(
+                    "locale",
+                    format!("{} reports non-UTF-8 locale ({})", source, display.clone()),
+                    format!("Locale check failed: {}={} is not UTF-8", source, display),
+                )
+            }
+        }
+
+        fn check_locale(override_val: Option<String>) -> DoctorCheck {
+            if let Some(val) = override_val {
+                return evaluate_locale("AXM_DOCTOR_LOCALE_OVERRIDE", val);
+            }
+            for key in ["LC_ALL", "LC_CTYPE", "LANG"] {
+                if let Ok(val) = std::env::var(key) {
+                    return evaluate_locale(key, val);
+                }
+            }
+            let candidate =
+                std::env::temp_dir().join(format!("axm-doctor-診断-{}.txt", unique_suffix()));
+            match std::fs::File::create(&candidate) {
+                Ok(mut file) => {
+                    if let Err(e) = file.write_all("✓".as_bytes()) {
+                        let _ = std::fs::remove_file(&candidate);
+                        return DoctorCheck::fail(
+                            "locale",
+                            "UTF-8 filesystem probe failed",
+                            format!("Locale check failed: {}", e),
+                        );
+                    }
+                    drop(file);
+                    let _ = std::fs::remove_file(&candidate);
+                    DoctorCheck::ok(
+                        "locale",
+                        "UTF-8 filesystem probe succeeded (fallback)".to_string(),
+                    )
+                }
+                Err(e) => DoctorCheck::fail(
+                    "locale",
+                    "UTF-8 filesystem probe failed",
+                    format!("Locale check failed: {}", e),
+                ),
+            }
+        }
+
+        let sqlite_dir = env::var("AXM_DOCTOR_SQLITE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| env::temp_dir());
+        let data_dir = env::var("AXM_DOCTOR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("data"));
+        let locale_override = env::var("AXM_DOCTOR_LOCALE_OVERRIDE").ok();
+
+        let checks = vec![
+            check_sqlite(&sqlite_dir),
+            check_data_dir(&data_dir),
+            check_locale(locale_override),
+        ];
+
+        let mut report = serde_json::Map::new();
+        let mut ok_all = true;
+        for check in checks {
+            if !check.ok {
+                ok_all = false;
+                if let Some(msg) = &check.error {
+                    let _ = ui::write_error(err, msg);
+                }
+            }
+            report.insert(check.name.to_string(), check.to_value());
+        }
+
+        let _ = writeln!(
+            out,
+            "{}",
+            serde_json::to_string_pretty(&serde_json::Value::Object(report)).unwrap()
+        );
+
+        if ok_all {
+            0
+        } else {
+            2
+        }
+    }
+
     const COMMANDS: &[&str] = &[
         "play", "replay", "stats", "verify", "deal", "bench", "sim", "eval", "export", "dataset",
         "cfg", "doctor", "rng", "serve", "train",
@@ -1083,10 +1338,7 @@ where
                     2
                 }
             }
-            Commands::Doctor => {
-                let _ = writeln!(out, "Doctor: OK");
-                0
-            }
+            Commands::Doctor => run_doctor(out, err),
             Commands::Eval {
                 ai_a,
                 ai_b,
