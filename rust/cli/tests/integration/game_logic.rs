@@ -325,3 +325,93 @@ fn b6_verify_accepts_valid_dealing_sequence() {
         "verify should pass on valid dealing sequence"
     );
 }
+
+#[test]
+fn j1_verify_rejects_unknown_player_action() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000010",
+        "seed": 10,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [
+            {
+                "player_id": 9,
+                "street": "Preflop",
+                "action": {"Bet": 100}
+            }
+        ],
+        "board": standard_board(),
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 0, "p1": 0},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T00:20:00Z"
+    });
+    let path = write_records(&tfm, "unknown_action.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when actions reference unknown players"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("unknown player"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn j2_verify_rejects_unknown_player_net_result() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let record = json!({
+        "hand_id": "19700101-000011",
+        "seed": 11,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "p0",
+        "players": [
+            {"id": "p0", "stack_start": 1000},
+            {"id": "p1", "stack_start": 1000}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": null,
+        "showdown": null,
+        "net_result": {"p0": 100, "p9": -100},
+        "end_reason": "showdown",
+        "meta": {
+            "small_blind": "p0",
+            "big_blind": "p1",
+            "deal_sequence": ["p0", "p1", "p0", "p1"],
+            "burn_positions": [5, 9, 11]
+        },
+        "ts": "2025-01-01T00:30:00Z"
+    });
+    let path = write_records(&tfm, "unknown_net_result.jsonl", &[record]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail on unknown net_result player"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("net_result"),
+        "stderr: {}",
+        res.stderr
+    );
+}
