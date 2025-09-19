@@ -5,6 +5,10 @@ use axm_engine::player::PlayerAction as A;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::helpers::cli_runner::CliRunner;
+
+mod helpers;
+
 fn tmp_jsonl(name: &str) -> PathBuf {
     let mut p = PathBuf::from("target");
     p.push(format!("{}_{}.jsonl", name, std::process::id()));
@@ -73,12 +77,49 @@ fn verify_checks_records() {
 
 #[test]
 fn doctor_reports_ok() {
-    let mut out: Vec<u8> = Vec::new();
-    let mut err: Vec<u8> = Vec::new();
-    let code = run(["axm", "doctor"], &mut out, &mut err);
-    assert_eq!(code, 0);
-    let stdout = String::from_utf8_lossy(&out);
-    assert!(stdout.contains("Doctor: OK"));
+    let _guard = helpers::cli_runner::DOCTOR_LOCK
+        .lock()
+        .expect("doctor lock");
+
+    let base = PathBuf::from("target").join(format!("doctor_ok_{}", std::process::id()));
+    let sqlite_dir = base.join("sqlite");
+    let data_dir = base.join("data");
+    fs::create_dir_all(&sqlite_dir).unwrap();
+    fs::create_dir_all(&data_dir).unwrap();
+
+    let env_pairs = vec![
+        (
+            "AXM_DOCTOR_SQLITE_DIR".to_string(),
+            sqlite_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_DATA_DIR".to_string(),
+            data_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_LOCALE_OVERRIDE".to_string(),
+            "en_US.UTF-8".to_string(),
+        ),
+    ];
+    let env_refs: Vec<(&str, &str)> = env_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run_with_env(&["doctor"], &env_refs);
+
+    assert_eq!(res.exit_code, 0, "doctor should succeed: {}", res.stderr);
+    let stdout = res.stdout.to_lowercase();
+    assert!(stdout.contains("\"sqlite\""), "stdout: {}", res.stdout);
+    assert!(stdout.contains("\"data_dir\""), "stdout: {}", res.stdout);
+    assert!(stdout.contains("\"locale\""), "stdout: {}", res.stdout);
+    assert!(
+        stdout.contains("\"status\": \"ok\""),
+        "stdout: {}",
+        res.stdout
+    );
+    assert!(res.stderr.is_empty(), "stderr: {}", res.stderr);
 }
 
 #[test]

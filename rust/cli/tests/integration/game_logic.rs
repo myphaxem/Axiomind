@@ -3,6 +3,8 @@ use crate::helpers::temp_files::TempFileManager;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+static DOCTOR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn standard_board() -> Vec<Value> {
     vec![
         json!({"rank": "Ace", "suit": "Hearts"}),
@@ -411,6 +413,161 @@ fn j2_verify_rejects_unknown_player_net_result() {
     );
     assert!(
         res.stderr.to_lowercase().contains("net_result"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn j3_doctor_reports_all_checks_ok() {
+    let _guard = DOCTOR_LOCK.lock().expect("doctor lock");
+    let tfm = TempFileManager::new().expect("temp dir");
+    let sqlite_dir = tfm.create_directory("sqlite_ok").expect("sqlite dir");
+    let data_dir = tfm.create_directory("data_ok").expect("data dir");
+
+    let env_pairs = vec![
+        (
+            "AXM_DOCTOR_SQLITE_DIR".to_string(),
+            sqlite_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_DATA_DIR".to_string(),
+            data_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_LOCALE_OVERRIDE".to_string(),
+            "en_US.UTF-8".to_string(),
+        ),
+    ];
+    let env_refs: Vec<(&str, &str)> = env_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run_with_env(&["doctor"], &env_refs);
+
+    assert_eq!(res.exit_code, 0, "doctor should succeed: {}", res.stderr);
+    let stdout = res.stdout.to_lowercase();
+    assert!(stdout.contains("\"sqlite\""), "stdout: {}", res.stdout);
+    assert!(
+        stdout.contains("\"status\": \"ok\""),
+        "stdout: {}",
+        res.stdout
+    );
+    assert!(res.stderr.is_empty(), "stderr: {}", res.stderr);
+}
+
+#[test]
+fn j4_doctor_reports_sqlite_permission_error() {
+    let _guard = DOCTOR_LOCK.lock().expect("doctor lock");
+    let tfm = TempFileManager::new().expect("temp dir");
+    let blocker = tfm
+        .create_file("blocked/location", "content")
+        .expect("create file");
+    let data_dir = tfm.create_directory("data_ok").expect("data dir");
+
+    let env_pairs = vec![
+        (
+            "AXM_DOCTOR_SQLITE_DIR".to_string(),
+            blocker.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_DATA_DIR".to_string(),
+            data_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_LOCALE_OVERRIDE".to_string(),
+            "en_US.UTF-8".to_string(),
+        ),
+    ];
+    let env_refs: Vec<(&str, &str)> = env_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run_with_env(&["doctor"], &env_refs);
+
+    assert_ne!(res.exit_code, 0, "doctor should fail on sqlite check");
+    assert!(
+        res.stderr.to_lowercase().contains("sqlite"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn j5_doctor_reports_data_dir_error() {
+    let _guard = DOCTOR_LOCK.lock().expect("doctor lock");
+    let tfm = TempFileManager::new().expect("temp dir");
+    let existing_file = tfm
+        .create_file("not_a_dir", "content")
+        .expect("create file");
+    let sqlite_dir = tfm.create_directory("sqlite_ok").expect("sqlite dir");
+
+    let env_pairs = vec![
+        (
+            "AXM_DOCTOR_SQLITE_DIR".to_string(),
+            sqlite_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_DATA_DIR".to_string(),
+            existing_file.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_LOCALE_OVERRIDE".to_string(),
+            "en_US.UTF-8".to_string(),
+        ),
+    ];
+    let env_refs: Vec<(&str, &str)> = env_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run_with_env(&["doctor"], &env_refs);
+
+    assert_ne!(
+        res.exit_code, 0,
+        "doctor should fail on data directory check"
+    );
+    assert!(
+        res.stderr.to_lowercase().contains("data"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn j6_doctor_reports_locale_error() {
+    let _guard = DOCTOR_LOCK.lock().expect("doctor lock");
+    let tfm = TempFileManager::new().expect("temp dir");
+    let sqlite_dir = tfm.create_directory("sqlite_ok").expect("sqlite dir");
+    let data_dir = tfm.create_directory("data_ok").expect("data dir");
+
+    let env_pairs = vec![
+        (
+            "AXM_DOCTOR_SQLITE_DIR".to_string(),
+            sqlite_dir.to_string_lossy().into_owned(),
+        ),
+        (
+            "AXM_DOCTOR_DATA_DIR".to_string(),
+            data_dir.to_string_lossy().into_owned(),
+        ),
+        ("AXM_DOCTOR_LOCALE_OVERRIDE".to_string(), "C".to_string()),
+    ];
+    let env_refs: Vec<(&str, &str)> = env_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run_with_env(&["doctor"], &env_refs);
+
+    assert_ne!(res.exit_code, 0, "doctor should fail on locale check");
+    assert!(
+        res.stderr.to_lowercase().contains("locale"),
         "stderr: {}",
         res.stderr
     );
