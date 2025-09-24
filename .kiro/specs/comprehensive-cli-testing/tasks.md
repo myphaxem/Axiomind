@@ -134,7 +134,7 @@
   - _Requirements: 11.5, 11.6_
 
 - [ ] 11. Implement data format validation tests (K-series)
-- [ ] 11.1 Create JSONL schema validation tests
+- [x] 11.1 Create JSONL schema validation tests
   - Test required field validation: hand_id, seed, level, blinds, button, players, actions, board, showdown, net_result, end_reason, timestamp
   - Verify hand_id format enforcement (YYYYMMDD-NNNNNN)
   - Test hand_id uniqueness validation
