@@ -1702,6 +1702,17 @@ where
                 let (trv, rest) = lines.split_at(n_tr);
                 let (vav, tev) = rest.split_at(n_va);
                 std::fs::create_dir_all(&outdir).unwrap();
+                for (idx, raw) in lines.iter().enumerate() {
+                    let trimmed = raw.trim();
+                    if let Err(e) = serde_json::from_str::<axm_engine::logger::HandRecord>(trimmed)
+                    {
+                        let _ = ui::write_error(
+                            err,
+                            &format!("Invalid record at line {}: {}", idx + 1, e),
+                        );
+                        return 2;
+                    }
+                }
                 let write_split = |path: &std::path::Path, data: &[String]| {
                     let mut f = std::fs::File::create(path).unwrap();
                     for l in data {
