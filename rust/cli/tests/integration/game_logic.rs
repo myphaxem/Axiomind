@@ -756,3 +756,176 @@ fn j10_verify_rejects_short_board() {
         res.stdout
     );
 }
+
+#[test]
+fn l1_verify_rejects_unexpected_player_join() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let opening_hand = json!({
+        "hand_id": "19700101-000001",
+        "seed": 1,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 100},
+            {"id": "p1", "stack_start": 100}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p0",
+        "showdown": null,
+        "net_result": {"p0": 10, "p1": -10},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:00:00Z"
+    });
+    let roster_change = json!({
+        "hand_id": "19700101-000002",
+        "seed": 2,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 110},
+            {"id": "p2", "stack_start": 90}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p2",
+        "showdown": null,
+        "net_result": {"p0": -10, "p2": 10},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:02:00Z"
+    });
+    let path = write_records(
+        &tfm,
+        "roster_expansion.jsonl",
+        &[opening_hand, roster_change],
+    );
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when a new player joins mid-match"
+    );
+    assert!(
+        res.stderr
+            .to_lowercase()
+            .contains("unexpected player p2 at hand 2"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn l2_verify_rejects_missing_player_without_elimination() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let first_hand = json!({
+        "hand_id": "19700101-000010",
+        "seed": 10,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 100},
+            {"id": "p1", "stack_start": 100}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p1",
+        "showdown": null,
+        "net_result": {"p0": -10, "p1": 10},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:00:00Z"
+    });
+    let missing_player_hand = json!({
+        "hand_id": "19700101-000011",
+        "seed": 11,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 90}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p0",
+        "showdown": null,
+        "net_result": {"p0": 0},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:02:00Z"
+    });
+    let path = write_records(
+        &tfm,
+        "roster_missing.jsonl",
+        &[first_hand, missing_player_hand],
+    );
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_ne!(
+        res.exit_code, 0,
+        "verify should fail when a tracked player disappears without busting"
+    );
+    assert!(
+        res.stderr
+            .to_lowercase()
+            .contains("missing player p1 at hand 2"),
+        "stderr: {}",
+        res.stderr
+    );
+}
+
+#[test]
+fn l3_verify_accepts_stable_roster_with_rotation() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let first_hand = json!({
+        "hand_id": "19700101-000100",
+        "seed": 100,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p0", "stack_start": 100},
+            {"id": "p1", "stack_start": 100}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p1",
+        "showdown": null,
+        "net_result": {"p0": -25, "p1": 25},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:00:00Z"
+    });
+    let rotated_hand = json!({
+        "hand_id": "19700101-000101",
+        "seed": 101,
+        "level": 1,
+        "blinds": {"sb": 50, "bb": 100},
+        "button": "BTN",
+        "players": [
+            {"id": "p1", "stack_start": 125},
+            {"id": "p0", "stack_start": 75}
+        ],
+        "actions": [],
+        "board": standard_board(),
+        "result": "p0",
+        "showdown": null,
+        "net_result": {"p0": 25, "p1": -25},
+        "end_reason": "showdown",
+        "ts": "2025-01-01T00:02:00Z"
+    });
+    let path = write_records(&tfm, "roster_rotation.jsonl", &[first_hand, rotated_hand]);
+
+    let cli = CliRunner::new().expect("cli runner");
+    let res = cli.run(&["verify", "--input", &path.to_string_lossy()]);
+    assert_eq!(
+        res.exit_code, 0,
+        "verify should pass when roster stays constant"
+    );
+    assert!(
+        res.stdout.to_lowercase().contains("verify: ok (hands=2)"),
+        "stdout: {}",
+        res.stdout
+    );
+}
