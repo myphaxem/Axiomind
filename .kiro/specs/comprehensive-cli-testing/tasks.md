@@ -133,14 +133,14 @@
   - Test card dealing validation (52 unique cards, proper burn positions, 5 board cards)
   - _Requirements: 11.5, 11.6_
 
-- [ ] 11. Implement data format validation tests (K-series)
+- [x] 11. Implement data format validation tests (K-series)
 - [x] 11.1 Create JSONL schema validation tests
   - Test required field validation: hand_id, seed, level, blinds, button, players, actions, board, showdown, net_result, end_reason, timestamp
   - Verify hand_id format enforcement (YYYYMMDD-NNNNNN)
   - Test hand_id uniqueness validation
   - _Requirements: 12.1, 12.2_
 
-- [ ] 11.2 Implement concurrency and performance tests
+- [x] 11.2 Implement concurrency and performance tests
   - Test SQLite single-process write lock handling
   - Verify retry/failure behavior for lock conflicts
   - Test large file processing without excessive memory usage

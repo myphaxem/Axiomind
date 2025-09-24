@@ -47,5 +47,83 @@ mod integration {
                 res.stderr
             );
         }
+
+        #[test]
+        fn k2_export_reports_lock_conflict() {
+            use rusqlite::Connection;
+
+            let tfm = TempFileManager::new().expect("temp dir");
+            let input = tfm
+                .create_file(
+                    "valid.jsonl",
+                    "{\"hand_id\":\"20250102-000001\",\"seed\":1,\"actions\":[],\"board\":[],\"result\":null,\"ts\":null,\"meta\":null}\n",
+                )
+                .expect("write input jsonl");
+            let sqlite_dir = tfm.create_directory("sqlite").expect("create sqlite dir");
+            let db_path = sqlite_dir.join("locked.sqlite");
+
+            let conn = Connection::open(&db_path).expect("open sqlite");
+            conn.execute("BEGIN IMMEDIATE", []).expect("lock sqlite");
+
+            let cli = CliRunner::new().expect("cli runner");
+            let res = cli.run(&[
+                "export",
+                "--input",
+                input.to_string_lossy().as_ref(),
+                "--format",
+                "sqlite",
+                "--output",
+                db_path.to_string_lossy().as_ref(),
+            ]);
+
+            assert_eq!(
+                res.exit_code, 2,
+                "export should fail while database is locked"
+            );
+            assert!(
+                res.stderr.contains("SQLite busy"),
+                "expected lock retry message, stderr={}",
+                res.stderr
+            );
+
+            let _ = conn.execute("ROLLBACK", []);
+        }
+
+        #[test]
+        fn k3_dataset_streams_large_input() {
+            let tfm = TempFileManager::new().expect("temp dir");
+            let mut content = String::new();
+            for i in 0..32 {
+                content.push_str(&format!(
+                    "{{\"hand_id\":\"20250102-{idx:06}\",\"seed\":1,\"actions\":[],\"board\":[],\"result\":null,\"ts\":null,\"meta\":null}}\n",
+                    idx = i + 1
+                ));
+            }
+            let input = tfm
+                .create_file("bulk.jsonl", &content)
+                .expect("write bulk input");
+            let outdir = tfm.create_directory("dataset").expect("create dataset dir");
+            let cli = CliRunner::new().expect("cli runner");
+            let res = cli.run_with_env(
+                &[
+                    "dataset",
+                    "--input",
+                    input.to_string_lossy().as_ref(),
+                    "--outdir",
+                    outdir.to_string_lossy().as_ref(),
+                ],
+                &[
+                    ("AXM_DATASET_STREAM_THRESHOLD", "5"),
+                    ("AXM_DATASET_STREAM_TRACE", "1"),
+                ],
+            );
+
+            assert_eq!(res.exit_code, 0, "dataset should succeed in streaming mode");
+            assert!(
+                res.stderr.contains("Streaming dataset input"),
+                "expected streaming trace message, stderr={}",
+                res.stderr
+            );
+        }
     }
 }

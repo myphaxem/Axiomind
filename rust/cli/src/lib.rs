@@ -453,6 +453,174 @@ where
         Ok(splits)
     }
 
+    fn dataset_stream_if_needed(
+        input: &str,
+        outdir: &str,
+        train: Option<f64>,
+        val: Option<f64>,
+        test: Option<f64>,
+        seed: Option<u64>,
+        err: &mut dyn Write,
+    ) -> Option<i32> {
+        use std::io::{BufRead, BufReader, BufWriter};
+
+        let threshold = std::env::var("AXM_DATASET_STREAM_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(10_000);
+        if threshold == 0 {
+            return None;
+        }
+
+        let trace_stream = std::env::var("AXM_DATASET_STREAM_TRACE")
+            .map(|v| {
+                matches!(
+                    v.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
+
+        let count_file = match std::fs::File::open(input) {
+            Ok(f) => f,
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
+                return Some(2);
+            }
+        };
+
+        let mut record_count = 0usize;
+        {
+            let reader = BufReader::new(count_file);
+            for line in reader.lines() {
+                match line {
+                    Ok(line) => {
+                        if !line.trim().is_empty() {
+                            record_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
+                        return Some(2);
+                    }
+                }
+            }
+        }
+
+        if record_count == 0 {
+            let _ = ui::write_error(err, "Empty input");
+            return Some(2);
+        }
+
+        if record_count <= threshold {
+            return None;
+        }
+
+        let splits = match compute_splits(train, val, test) {
+            Ok(v) => v,
+            Err(msg) => {
+                let _ = ui::write_error(err, &msg);
+                return Some(2);
+            }
+        };
+
+        let tr = splits[0];
+        let va = splits[1];
+        let n = record_count;
+        let n_tr = ((tr * n as f64).round() as usize).min(n);
+        let n_va = ((va * n as f64).round() as usize).min(n.saturating_sub(n_tr));
+
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed.unwrap_or(0));
+        let mut indices: Vec<usize> = (0..record_count).collect();
+        indices.shuffle(&mut rng);
+
+        #[derive(Clone, Copy)]
+        enum SplitSlot {
+            Train,
+            Val,
+            Test,
+        }
+
+        let mut assignments = vec![SplitSlot::Test; record_count];
+        for &idx in indices.iter().take(n_tr) {
+            assignments[idx] = SplitSlot::Train;
+        }
+        for &idx in indices.iter().skip(n_tr).take(n_va) {
+            assignments[idx] = SplitSlot::Val;
+        }
+
+        if let Err(e) = std::fs::create_dir_all(outdir) {
+            let _ = ui::write_error(
+                err,
+                &format!("Failed to create directory {}: {}", outdir, e),
+            );
+            return Some(2);
+        }
+
+        if trace_stream {
+            let _ = ui::write_error(
+                err,
+                &format!("Streaming dataset input (records={})", record_count),
+            );
+        }
+
+        let out_root = std::path::Path::new(outdir);
+        let mut train_writer =
+            BufWriter::new(std::fs::File::create(out_root.join("train.jsonl")).unwrap());
+        let mut val_writer =
+            BufWriter::new(std::fs::File::create(out_root.join("val.jsonl")).unwrap());
+        let mut test_writer =
+            BufWriter::new(std::fs::File::create(out_root.join("test.jsonl")).unwrap());
+
+        let data_file = match std::fs::File::open(input) {
+            Ok(f) => f,
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
+                return Some(2);
+            }
+        };
+        let reader = BufReader::new(data_file);
+        let mut record_idx = 0usize;
+
+        for (line_idx, line_res) in reader.lines().enumerate() {
+            let line = match line_res {
+                Ok(line) => line,
+                Err(e) => {
+                    let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
+                    return Some(2);
+                }
+            };
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Err(e) = serde_json::from_str::<axm_engine::logger::HandRecord>(&line) {
+                let _ = ui::write_error(
+                    err,
+                    &format!("Invalid record at line {}: {}", line_idx + 1, e),
+                );
+                return Some(2);
+            }
+            let bucket = assignments
+                .get(record_idx)
+                .copied()
+                .unwrap_or(SplitSlot::Test);
+            record_idx += 1;
+            match bucket {
+                SplitSlot::Train => {
+                    let _ = writeln!(train_writer, "{}", line);
+                }
+                SplitSlot::Val => {
+                    let _ = writeln!(val_writer, "{}", line);
+                }
+                SplitSlot::Test => {
+                    let _ = writeln!(test_writer, "{}", line);
+                }
+            }
+        }
+
+        Some(0)
+    }
+
     fn run_stats(input: &str, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         use std::path::Path;
 
@@ -611,42 +779,62 @@ where
     }
 
     fn export_sqlite(content: &str, output: &str, err: &mut dyn Write) -> i32 {
-        let output_path = std::path::Path::new(output);
-        if let Some(parent) = output_path.parent() {
-            if !parent.as_os_str().is_empty() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
-                    let _ = ui::write_error(
-                        err,
-                        &format!("Failed to create directory {}: {}", parent.display(), e),
-                    );
-                    return 2;
+        enum ExportAttemptError {
+            Busy(String),
+            Fatal(String),
+        }
+
+        fn sqlite_busy(err: &rusqlite::Error) -> bool {
+            matches!(
+                err,
+                rusqlite::Error::SqliteFailure(info, _)
+                    if matches!(
+                        info.code,
+                        rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                    )
+            )
+        }
+
+        fn export_sqlite_attempt(content: &str, output: &str) -> Result<(), ExportAttemptError> {
+            let output_path = std::path::Path::new(output);
+            if let Some(parent) = output_path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent).map_err(|e| {
+                        ExportAttemptError::Fatal(format!(
+                            "Failed to create directory {}: {}",
+                            parent.display(),
+                            e
+                        ))
+                    })?;
                 }
             }
-        }
 
-        let mut conn = match rusqlite::Connection::open(output) {
-            Ok(conn) => conn,
-            Err(e) => {
-                let _ = ui::write_error(err, &format!("Failed to open {}: {}", output, e));
-                return 2;
-            }
-        };
+            let mut conn = rusqlite::Connection::open(output).map_err(|e| {
+                if sqlite_busy(&e) {
+                    ExportAttemptError::Busy(format!("open {}: {}", output, e))
+                } else {
+                    ExportAttemptError::Fatal(format!("Failed to open {}: {}", output, e))
+                }
+            })?;
 
-        let tx = match conn.transaction() {
-            Ok(tx) => tx,
-            Err(e) => {
-                let _ = ui::write_error(err, &format!("Failed to start transaction: {}", e));
-                return 2;
-            }
-        };
+            let tx = conn.transaction().map_err(|e| {
+                if sqlite_busy(&e) {
+                    ExportAttemptError::Busy(format!("start transaction: {}", e))
+                } else {
+                    ExportAttemptError::Fatal(format!("Failed to start transaction: {}", e))
+                }
+            })?;
 
-        if let Err(e) = tx.execute("DROP TABLE IF EXISTS hands", []) {
-            let _ = ui::write_error(err, &format!("Failed to reset schema: {}", e));
-            return 2;
-        }
+            tx.execute("DROP TABLE IF EXISTS hands", []).map_err(|e| {
+                if sqlite_busy(&e) {
+                    ExportAttemptError::Busy(format!("reset schema: {}", e))
+                } else {
+                    ExportAttemptError::Fatal(format!("Failed to reset schema: {}", e))
+                }
+            })?;
 
-        if let Err(e) = tx.execute(
-            "CREATE TABLE hands (
+            tx.execute(
+                "CREATE TABLE hands (
                 hand_id TEXT PRIMARY KEY NOT NULL,
                 seed INTEGER,
                 result TEXT,
@@ -655,81 +843,130 @@ where
                 board INTEGER NOT NULL,
                 raw_json TEXT NOT NULL
             )",
-            [],
-        ) {
-            let _ = ui::write_error(err, &format!("Failed to create schema: {}", e));
-            return 2;
-        }
+                [],
+            )
+            .map_err(|e| {
+                if sqlite_busy(&e) {
+                    ExportAttemptError::Busy(format!("create schema: {}", e))
+                } else {
+                    ExportAttemptError::Fatal(format!("Failed to create schema: {}", e))
+                }
+            })?;
 
-        let mut stmt = match tx.prepare(
-            "INSERT INTO hands (hand_id, seed, result, ts, actions, board, raw_json)
+            let mut stmt = tx
+                .prepare(
+                    "INSERT INTO hands (hand_id, seed, result, ts, actions, board, raw_json)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        ) {
-            Ok(stmt) => stmt,
-            Err(e) => {
-                let _ = ui::write_error(err, &format!("Failed to prepare insert: {}", e));
-                return 2;
-            }
-        };
+                )
+                .map_err(|e| {
+                    if sqlite_busy(&e) {
+                        ExportAttemptError::Busy(format!("prepare insert: {}", e))
+                    } else {
+                        ExportAttemptError::Fatal(format!("Failed to prepare insert: {}", e))
+                    }
+                })?;
 
-        for line in content.lines() {
-            let raw = line.trim();
-            if raw.is_empty() {
-                continue;
+            for (line_idx, line) in content.lines().enumerate() {
+                let raw = line.trim();
+                if raw.is_empty() {
+                    continue;
+                }
+
+                let record: axm_engine::logger::HandRecord = serde_json::from_str(raw)
+                    .map_err(|e| ExportAttemptError::Fatal(format!("Invalid record: {}", e)))?;
+
+                let axm_engine::logger::HandRecord {
+                    hand_id,
+                    seed,
+                    actions,
+                    board,
+                    result,
+                    ts,
+                    ..
+                } = record;
+
+                let actions_len = actions.len() as i64;
+                let board_len = board.len() as i64;
+
+                let seed_val = match seed {
+                    Some(v) if v > i64::MAX as u64 => {
+                        return Err(ExportAttemptError::Fatal(format!(
+                            "Seed {} exceeds supported range",
+                            v
+                        )));
+                    }
+                    Some(v) => Some(v as i64),
+                    None => None,
+                };
+
+                stmt.execute(rusqlite::params![
+                    hand_id,
+                    seed_val,
+                    result,
+                    ts,
+                    actions_len,
+                    board_len,
+                    raw,
+                ])
+                .map_err(|e| {
+                    if sqlite_busy(&e) {
+                        ExportAttemptError::Busy(format!(
+                            "insert record at line {}: {}",
+                            line_idx + 1,
+                            e
+                        ))
+                    } else {
+                        ExportAttemptError::Fatal(format!("Failed to insert record: {}", e))
+                    }
+                })?;
             }
 
-            let record: axm_engine::logger::HandRecord = match serde_json::from_str(raw) {
-                Ok(rec) => rec,
-                Err(e) => {
-                    let _ = ui::write_error(err, &format!("Invalid record: {}", e));
+            drop(stmt);
+
+            tx.commit().map_err(|e| {
+                if sqlite_busy(&e) {
+                    ExportAttemptError::Busy(format!("commit export: {}", e))
+                } else {
+                    ExportAttemptError::Fatal(format!("Failed to commit export: {}", e))
+                }
+            })?;
+
+            Ok(())
+        }
+
+        let max_attempts = std::env::var("AXM_EXPORT_SQLITE_RETRIES")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(3);
+        let backoff_ms = std::env::var("AXM_EXPORT_SQLITE_RETRY_SLEEP_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(50);
+
+        for attempt in 1..=max_attempts {
+            match export_sqlite_attempt(content, output) {
+                Ok(()) => return 0,
+                Err(ExportAttemptError::Busy(msg)) => {
+                    if attempt == max_attempts {
+                        let _ = ui::write_error(
+                            err,
+                            &format!("SQLite busy after {} attempt(s): {}", attempt, msg),
+                        );
+                        return 2;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        backoff_ms * attempt as u64,
+                    ));
+                }
+                Err(ExportAttemptError::Fatal(msg)) => {
+                    let _ = ui::write_error(err, &msg);
                     return 2;
                 }
-            };
-
-            let axm_engine::logger::HandRecord {
-                hand_id,
-                seed,
-                actions,
-                board,
-                result,
-                ts,
-                ..
-            } = record;
-
-            let actions_len = actions.len() as i64;
-            let board_len = board.len() as i64;
-
-            let seed_val = match seed {
-                Some(v) if v > i64::MAX as u64 => {
-                    let _ = ui::write_error(err, &format!("Seed {} exceeds supported range", v));
-                    return 2;
-                }
-                Some(v) => Some(v as i64),
-                None => None,
-            };
-
-            if let Err(e) = stmt.execute(rusqlite::params![
-                hand_id,
-                seed_val,
-                result,
-                ts,
-                actions_len,
-                board_len,
-                raw,
-            ]) {
-                let _ = ui::write_error(err, &format!("Failed to insert record: {}", e));
-                return 2;
             }
         }
 
-        drop(stmt);
-
-        if let Err(e) = tx.commit() {
-            let _ = ui::write_error(err, &format!("Failed to commit export: {}", e));
-            return 2;
-        }
-
-        0
+        2
     }
 
     fn run_doctor(out: &mut dyn Write, err: &mut dyn Write) -> i32 {
@@ -1663,6 +1900,11 @@ where
                 test,
                 seed,
             } => {
+                if let Some(code) =
+                    dataset_stream_if_needed(&input, &outdir, train, val, test, seed, err)
+                {
+                    return code;
+                }
                 let content = std::fs::read_to_string(&input)
                     .map_err(|e| {
                         let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
@@ -1699,9 +1941,6 @@ where
                 let n_tr = ((tr * n as f64).round() as usize).min(n);
                 let n_va = ((va * n as f64).round() as usize).min(n.saturating_sub(n_tr));
                 let _n_te = n.saturating_sub(n_tr + n_va);
-                let (trv, rest) = lines.split_at(n_tr);
-                let (vav, tev) = rest.split_at(n_va);
-                std::fs::create_dir_all(&outdir).unwrap();
                 for (idx, raw) in lines.iter().enumerate() {
                     let trimmed = raw.trim();
                     if let Err(e) = serde_json::from_str::<axm_engine::logger::HandRecord>(trimmed)
@@ -1713,6 +1952,9 @@ where
                         return 2;
                     }
                 }
+                let (trv, rest) = lines.split_at(n_tr);
+                let (vav, tev) = rest.split_at(n_va);
+                std::fs::create_dir_all(&outdir).unwrap();
                 let write_split = |path: &std::path::Path, data: &[String]| {
                     let mut f = std::fs::File::create(path).unwrap();
                     for l in data {
