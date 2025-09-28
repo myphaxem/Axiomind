@@ -404,6 +404,60 @@ fn validate_dealing_meta(
     Ok(())
 }
 
+fn validate_roster_state(
+    prev: Option<&HashMap<String, i64>>,
+    current: &HashMap<String, i64>,
+    hands: u64,
+    err: &mut dyn Write,
+    ok: &mut bool,
+) {
+    if let Some(prev_map) = prev {
+        for (id, stack_start) in current {
+            if let Some(prev_stack) = prev_map.get(id) {
+                if *prev_stack != *stack_start {
+                    *ok = false;
+                    let _ = ui::write_error(
+                        err,
+                        &format!("Stack mismatch for {} at hand {}", id, hands),
+                    );
+                }
+                if *prev_stack <= 0 {
+                    *ok = false;
+                    let _ = ui::write_error(
+                        err,
+                        &format!(
+                            "Player {} reappeared after elimination at hand {}",
+                            id, hands
+                        ),
+                    );
+                }
+            } else {
+                *ok = false;
+                let _ =
+                    ui::write_error(err, &format!("Unexpected player {} at hand {}", id, hands));
+            }
+        }
+        for (id, prev_stack) in prev_map {
+            if !current.contains_key(id) && *prev_stack > 0 {
+                *ok = false;
+                let _ = ui::write_error(err, &format!("Missing player {} at hand {}", id, hands));
+            }
+        }
+    }
+    for (id, stack_start) in current {
+        if *stack_start <= 0 {
+            *ok = false;
+            let _ = ui::write_error(
+                err,
+                &format!(
+                    "Player {} has non-positive starting stack at hand {}",
+                    id, hands
+                ),
+            );
+        }
+    }
+}
+
 pub fn run<I, S>(args: I, out: &mut dyn Write, err: &mut dyn Write) -> i32
 where
     I: IntoIterator<Item = S>,
@@ -1437,32 +1491,12 @@ where
                                         .unwrap_or(0);
                                     start_map.insert(id.to_string(), stack);
                                 }
-                                if !stacks_after_hand.is_empty() {
-                                    for (id, stack_start) in &start_map {
-                                        if let Some(prev) = stacks_after_hand.get(id) {
-                                            if *prev != *stack_start {
-                                                ok = false;
-                                                let _ = ui::write_error(
-                                                    err,
-                                                    &format!(
-                                                        "Stack mismatch for {} at hand {}",
-                                                        id, hands
-                                                    ),
-                                                );
-                                            }
-                                        }
-                                        if *stack_start <= 0 {
-                                            ok = false;
-                                            let _ = ui::write_error(
-                                                err,
-                                                &format!(
-                                                    "Player {} has non-positive starting stack at hand {}",
-                                                    id, hands
-                                                ),
-                                            );
-                                        }
-                                    }
-                                }
+                                let prev_state = if stacks_after_hand.is_empty() {
+                                    None
+                                } else {
+                                    Some(&stacks_after_hand)
+                                };
+                                validate_roster_state(prev_state, &start_map, hands, err, &mut ok);
                                 starting_stacks = Some(start_map.clone());
                                 stacks_after_hand = start_map;
                                 if let Some(nr_obj) =

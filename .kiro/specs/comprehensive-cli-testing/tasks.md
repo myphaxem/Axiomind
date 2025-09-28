@@ -146,8 +146,8 @@
   - Test large file processing without excessive memory usage
   - _Requirements: 12.3, 12.4_
 
-- [ ] 12. Implement game state management tests (L-series)
-- [ ] 12.1 Create game state validation tests
+- [x] 12. Implement game state management tests (L-series)
+- [x] 12.1 Create game state validation tests
   - Test automatic folding for hands with no winning potential
   - Verify proper street transition logic
   - Test hand evaluation consistency and ordering
