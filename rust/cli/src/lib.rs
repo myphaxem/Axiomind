@@ -463,16 +463,25 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    fn strip_utf8_bom(s: &mut String) {
+        const UTF8_BOM: &str = "\u{feff}";
+        if s.starts_with(UTF8_BOM) {
+            s.drain(..UTF8_BOM.len());
+        }
+    }
+
     fn read_text_auto(path: &str) -> Result<String, String> {
-        if path.ends_with(".zst") {
+        let mut content = if path.ends_with(".zst") {
             // Read entire compressed file then decompress; more portable across platforms
             let comp = std::fs::read(path).map_err(|e| e.to_string())?;
             // Use a conservative initial capacity; zstd will grow as needed
             let dec = zstd::bulk::decompress(&comp, 8 * 1024 * 1024).map_err(|e| e.to_string())?;
-            String::from_utf8(dec).map_err(|e| e.to_string())
+            String::from_utf8(dec).map_err(|e| e.to_string())?
         } else {
-            std::fs::read_to_string(path).map_err(|e| e.to_string())
-        }
+            std::fs::read_to_string(path).map_err(|e| e.to_string())?
+        };
+        strip_utf8_bom(&mut content);
+        Ok(content)
     }
     fn validate_speed(speed: Option<f64>) -> Result<(), String> {
         if let Some(s) = speed {
@@ -546,9 +555,14 @@ where
         let mut record_count = 0usize;
         {
             let reader = BufReader::new(count_file);
+            let mut first_line = true;
             for line in reader.lines() {
                 match line {
-                    Ok(line) => {
+                    Ok(mut line) => {
+                        if first_line {
+                            strip_utf8_bom(&mut line);
+                            first_line = false;
+                        }
                         if !line.trim().is_empty() {
                             record_count += 1;
                         }
@@ -635,15 +649,20 @@ where
         };
         let reader = BufReader::new(data_file);
         let mut record_idx = 0usize;
+        let mut first_line = true;
 
         for (line_idx, line_res) in reader.lines().enumerate() {
-            let line = match line_res {
+            let mut line = match line_res {
                 Ok(line) => line,
                 Err(e) => {
                     let _ = ui::write_error(err, &format!("Failed to read {}: {}", input, e));
                     return Some(2);
                 }
             };
+            if first_line {
+                strip_utf8_bom(&mut line);
+                first_line = false;
+            }
             if line.trim().is_empty() {
                 continue;
             }

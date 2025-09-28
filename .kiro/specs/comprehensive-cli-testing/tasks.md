@@ -153,8 +153,8 @@
   - Test hand evaluation consistency and ordering
   - _Requirements: 13.1, 13.2, 13.3_
 
-- [ ] 13. Implement cross-platform compatibility tests (M-series)
-- [ ] 13.1 Create text format handling tests
+- [x] 13. Implement cross-platform compatibility tests (M-series)
+- [x] 13.1 Create text format handling tests
   - Test CRLF to LF normalization
   - Verify cross-platform text processing
   - Test encoding compatibility
