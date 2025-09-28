@@ -5,6 +5,9 @@ use std::path::PathBuf;
 
 static DOCTOR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+use std::fs::File;
+use std::io::Write;
+
 fn standard_board() -> Vec<Value> {
     vec![
         json!({"rank": "Ace", "suit": "Hearts"}),
@@ -925,6 +928,141 @@ fn l3_verify_accepts_stable_roster_with_rotation() {
     );
     assert!(
         res.stdout.to_lowercase().contains("verify: ok (hands=2)"),
+        "stdout: {}",
+        res.stdout
+    );
+}
+
+// M-series: Cross-platform compatibility tests
+#[test]
+fn m1_stats_accepts_utf8_bom_records() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let records = vec![
+        json!({
+            "hand_id": "19700101-000200",
+            "seed": 200,
+            "level": 1,
+            "blinds": {"sb": 50, "bb": 100},
+            "button": "BTN",
+            "players": [
+                {"id": "p0", "stack_start": 100},
+                {"id": "p1", "stack_start": 100}
+            ],
+            "actions": [],
+            "board": standard_board(),
+            "result": "p0",
+            "showdown": null,
+            "net_result": {"p0": 25, "p1": -25},
+            "end_reason": "showdown",
+            "ts": "2025-01-02T00:00:00Z"
+        }),
+        json!({
+            "hand_id": "19700101-000201",
+            "seed": 201,
+            "level": 1,
+            "blinds": {"sb": 50, "bb": 100},
+            "button": "BTN",
+            "players": [
+                {"id": "p0", "stack_start": 100},
+                {"id": "p1", "stack_start": 100}
+            ],
+            "actions": [],
+            "board": standard_board(),
+            "result": "p1",
+            "showdown": null,
+            "net_result": {"p0": -25, "p1": 25},
+            "end_reason": "showdown",
+            "ts": "2025-01-02T00:01:00Z"
+        }),
+    ];
+    let serialized: Vec<String> = records
+        .iter()
+        .map(|rec| serde_json::to_string(rec).expect("serialize record"))
+        .collect();
+    let content = format!("\u{feff}{}\r\n{}\r\n", serialized[0], serialized[1]);
+    let path = tfm
+        .create_file("stats_bom.jsonl", &content)
+        .expect("create file");
+    let cli = CliRunner::new().expect("cli runner");
+    let input_path = path.to_string_lossy().into_owned();
+    let res = cli.run(&["stats", "--input", &input_path]);
+    assert_eq!(
+        res.exit_code, 0,
+        "stats should accept UTF-8 BOM input, stderr: {}",
+        res.stderr
+    );
+    assert!(
+        res.stdout.contains("\"hands\": 2"),
+        "stdout: {}",
+        res.stdout
+    );
+}
+
+#[test]
+fn m2_stats_accepts_utf8_bom_in_compressed_records() {
+    let tfm = TempFileManager::new().expect("temp dir");
+    let records = vec![
+        json!({
+            "hand_id": "19700101-000300",
+            "seed": 300,
+            "level": 1,
+            "blinds": {"sb": 50, "bb": 100},
+            "button": "BTN",
+            "players": [
+                {"id": "p0", "stack_start": 100},
+                {"id": "p1", "stack_start": 100}
+            ],
+            "actions": [],
+            "board": standard_board(),
+            "result": "p0",
+            "showdown": null,
+            "net_result": {"p0": 40, "p1": -40},
+            "end_reason": "showdown",
+            "ts": "2025-01-02T01:00:00Z"
+        }),
+        json!({
+            "hand_id": "19700101-000301",
+            "seed": 301,
+            "level": 1,
+            "blinds": {"sb": 50, "bb": 100},
+            "button": "BTN",
+            "players": [
+                {"id": "p0", "stack_start": 100},
+                {"id": "p1", "stack_start": 100}
+            ],
+            "actions": [],
+            "board": standard_board(),
+            "result": "p1",
+            "showdown": null,
+            "net_result": {"p0": -40, "p1": 40},
+            "end_reason": "showdown",
+            "ts": "2025-01-02T01:01:00Z"
+        }),
+    ];
+    let serialized: Vec<String> = records
+        .iter()
+        .map(|rec| serde_json::to_string(rec).expect("serialize record"))
+        .collect();
+    let content = format!("\u{feff}{}\r\n{}\r\n", serialized[0], serialized[1]);
+    let dir = tfm.create_directory("compressed").expect("dir");
+    let path = dir.join("stats_bom.jsonl.zst");
+    let file = File::create(&path).expect("create zst file");
+    let mut encoder = zstd::stream::write::Encoder::new(file, 0).expect("create zst encoder");
+    encoder
+        .write_all(content.as_bytes())
+        .expect("write zst contents");
+    encoder.finish().expect("finish encoder");
+
+    let cli = CliRunner::new().expect("cli runner");
+    let input_path = path.to_string_lossy().into_owned();
+    let res = cli.run(&["stats", "--input", &input_path]);
+    assert_eq!(
+        res.exit_code, 0,
+        "stats should accept UTF-8 BOM compressed input, stderr: {}",
+        res.stderr
+    );
+    assert!(
+        res.stdout.contains("\"hands\": 2"),
         "stdout: {}",
         res.stdout
     );
