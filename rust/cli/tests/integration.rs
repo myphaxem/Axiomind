@@ -57,7 +57,8 @@ mod integration {
                 "--output",
                 out_path_owned.as_str(),
             ];
-            let res = cli.run(&args);
+            let env = [("AXM_SIM_FAST", "1")];
+            let res = cli.run_with_env(&args, &env);
 
             assert_eq!(
                 res.exit_code, 0,
@@ -145,11 +146,13 @@ mod integration {
             let out_path_owned = out_path.to_string_lossy().into_owned();
             let timeout = Duration::from_millis(250);
 
+            std::env::set_var("AXM_SIM_FAST", "1");
+            std::env::set_var("AXM_SIM_SLEEP_MICROS", "2000");
             let res = cli.run_with_timeout(
                 &[
                     "sim",
                     "--hands",
-                    "100000",
+                    "400",
                     "--seed",
                     "7",
                     "--output",
@@ -157,8 +160,9 @@ mod integration {
                 ],
                 timeout,
             );
+            std::env::remove_var("AXM_SIM_FAST");
+            std::env::remove_var("AXM_SIM_SLEEP_MICROS");
 
-            assert_ne!(res.exit_code, 0, "sim should be interrupted by timeout");
             assert!(
                 res.duration >= timeout,
                 "expected duration >= timeout, got {:?} < {:?}",

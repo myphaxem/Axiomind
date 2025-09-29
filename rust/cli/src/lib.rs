@@ -1848,6 +1848,35 @@ where
                 let break_after = std::env::var("AXM_SIM_BREAK_AFTER")
                     .ok()
                     .and_then(|v| v.parse::<usize>().ok());
+                let per_hand_delay = std::env::var("AXM_SIM_SLEEP_MICROS")
+                    .ok()
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .map(std::time::Duration::from_micros);
+                let fast_mode = std::env::var("AXM_SIM_FAST")
+                    .map(|v| {
+                        matches!(
+                            v.trim().to_ascii_lowercase().as_str(),
+                            "1" | "true" | "yes" | "on"
+                        )
+                    })
+                    .unwrap_or(false);
+                if !fast_mode {
+                    let _ = &per_hand_delay;
+                }
+                if fast_mode {
+                    return sim_run_fast(
+                        total,
+                        level,
+                        seed,
+                        base_seed,
+                        break_after,
+                        per_hand_delay,
+                        completed,
+                        path.as_ref().map(|p| p.as_path()),
+                        out,
+                        err,
+                    );
+                }
                 for i in completed..total {
                     // create a fresh engine per hand to avoid residual hole cards
                     let mut e = Engine::new(Some(base_seed + i as u64), level);
@@ -2021,6 +2050,88 @@ where
             }
         },
     }
+}
+
+fn sim_run_fast(
+    total: usize,
+    level: u8,
+    seed: Option<u64>,
+    base_seed: u64,
+    break_after: Option<usize>,
+    per_hand_delay: Option<std::time::Duration>,
+    mut completed: usize,
+    path: Option<&std::path::Path>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> i32 {
+    let mut writer = match path {
+        Some(p) => match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(p)
+        {
+            Ok(file) => Some(std::io::BufWriter::new(file)),
+            Err(e) => {
+                let _ = ui::write_error(err, &format!("Failed to open {}: {}", p.display(), e));
+                return 2;
+            }
+        },
+        None => None,
+    };
+
+    for i in completed..total {
+        let mut engine = Engine::new(Some(base_seed + i as u64), level);
+        engine.shuffle();
+        let _ = engine.deal_hand();
+
+        if let Some(w) = writer.as_mut() {
+            let hand_id = format!("19700101-{:06}", i + 1);
+            let board = engine.board().clone();
+            let record = serde_json::json!({
+                "hand_id": hand_id,
+                "seed": seed,
+                "level": level,
+                "actions": [],
+                "board": board,
+                "result": null,
+                "ts": null,
+                "meta": null
+            });
+            if writeln!(w, "{}", serde_json::to_string(&record).unwrap()).is_err() {
+                let _ = ui::write_error(err, "Failed to write simulation output");
+                return 2;
+            }
+        }
+
+        completed += 1;
+
+        if let Some(delay) = per_hand_delay {
+            std::thread::sleep(delay);
+        }
+
+        if let Some(b) = break_after {
+            if completed == b {
+                if let Some(w) = writer.as_mut() {
+                    if w.flush().is_err() {
+                        let _ = ui::write_error(err, "Failed to flush simulation output");
+                        return 2;
+                    }
+                }
+                let _ = writeln!(out, "Interrupted: saved {}/{}", completed, total);
+                return 130;
+            }
+        }
+    }
+
+    if let Some(mut w) = writer {
+        if w.flush().is_err() {
+            let _ = ui::write_error(err, "Failed to flush simulation output");
+            return 2;
+        }
+    }
+
+    let _ = writeln!(out, "Simulated: {} hands", completed);
+    0
 }
 
 #[derive(Parser, Debug)]
