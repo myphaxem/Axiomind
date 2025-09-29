@@ -2,6 +2,8 @@ use axm_cli::run;
 use std::fs;
 use std::path::PathBuf;
 
+use std::env;
+
 fn p(name: &str, ext: &str) -> PathBuf {
     let mut pb = PathBuf::from("target");
     pb.push(format!("{}_{}.{}", name, std::process::id(), ext));
@@ -116,5 +118,95 @@ fn e2e_sim_stats_replay_export_verify() {
         "verify should be OK: stderr={} out={}",
         String::from_utf8_lossy(&err),
         String::from_utf8_lossy(&out)
+    );
+}
+
+#[test]
+fn e2e_dataset_stream_normalizes_crlf() {
+    // simulate a small dataset
+    let out_jsonl = p("wf_stream", "jsonl");
+    let _ = fs::remove_file(&out_jsonl);
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let code = run(
+        [
+            "axm",
+            "sim",
+            "--hands",
+            "5",
+            "--seed",
+            "99",
+            "--output",
+            out_jsonl.to_string_lossy().as_ref(),
+        ],
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(
+        code,
+        0,
+        "sim should exit 0, stderr={} out={}",
+        String::from_utf8_lossy(&err),
+        String::from_utf8_lossy(&out),
+    );
+
+    // rewrite file with CRLF endings to emulate Windows hand histories
+    let lf_contents = fs::read_to_string(&out_jsonl).unwrap();
+    let crlf_contents = lf_contents.replace('\n', "\r\n");
+    fs::write(&out_jsonl, crlf_contents).unwrap();
+
+    // force streaming splitter path to exercise BufRead processing
+    let var_name = "AXM_DATASET_STREAM_THRESHOLD";
+    let prev_threshold = env::var_os(var_name);
+    env::set_var(var_name, "1");
+    let out_dir = p("wf_dataset", "dir");
+    let _ = fs::remove_dir_all(&out_dir);
+    let out_dir_owned = out_dir.to_string_lossy().into_owned();
+
+    out.clear();
+    err.clear();
+    let code = run(
+        [
+            "axm",
+            "dataset",
+            "--input",
+            out_jsonl.to_string_lossy().as_ref(),
+            "--outdir",
+            &out_dir_owned,
+            "--train",
+            "0.5",
+            "--val",
+            "0.25",
+            "--test",
+            "0.25",
+            "--seed",
+            "123",
+        ],
+        &mut out,
+        &mut err,
+    );
+    match prev_threshold {
+        Some(val) => env::set_var(var_name, val),
+        None => env::remove_var(var_name),
+    }
+    assert_eq!(
+        code,
+        0,
+        "dataset should exit 0, stderr={} out={}",
+        String::from_utf8_lossy(&err),
+        String::from_utf8_lossy(&out),
+    );
+
+    let train = fs::read_to_string(out_dir.join("train.jsonl")).unwrap();
+    assert!(
+        !train.contains('\r'),
+        "train split should use LF-only newlines",
+    );
+    let val = fs::read_to_string(out_dir.join("val.jsonl")).unwrap();
+    assert!(!val.contains('\r'), "val split should use LF-only newlines",);
+    let test = fs::read_to_string(out_dir.join("test.jsonl")).unwrap();
+    assert!(
+        !test.contains('\r'),
+        "test split should use LF-only newlines",
     );
 }
