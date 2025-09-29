@@ -15,6 +15,165 @@ mod integration {
     mod simulation_basic; // rust/cli/tests/integration/simulation_basic.rs (6.1)
                           // rust/cli/tests/integration/game_logic.rs (B 4.2)
 
+    mod performance_stress {
+        use crate::helpers::cli_runner::CliRunner;
+        use crate::helpers::temp_files::TempFileManager;
+        use serde_json::json;
+        use std::fs;
+        use std::time::Duration;
+
+        fn generate_records(count: usize) -> String {
+            let mut buf = String::new();
+            for idx in 0..count {
+                let record = json!({
+                    "hand_id": format!("20250102-{idx:06}", idx = idx + 1),
+                    "seed": idx as u64,
+                    "actions": [],
+                    "board": [],
+                    "result": null,
+                    "ts": null,
+                    "meta": null,
+                    "showdown": null
+                });
+                buf.push_str(&record.to_string());
+                buf.push('\n');
+            }
+            buf
+        }
+
+        #[test]
+        fn p1_sim_large_run_under_budget() {
+            let cli = CliRunner::new().expect("cli runner");
+            let tfm = TempFileManager::new().expect("temp dir");
+            let sim_dir = tfm.create_directory("sim").expect("create sim dir");
+            let out_path = sim_dir.join("perf.jsonl");
+            let out_path_owned = out_path.to_string_lossy().into_owned();
+            let args = [
+                "sim",
+                "--hands",
+                "2000",
+                "--seed",
+                "42",
+                "--output",
+                out_path_owned.as_str(),
+            ];
+            let res = cli.run(&args);
+
+            assert_eq!(
+                res.exit_code, 0,
+                "sim should succeed: stderr={}",
+                res.stderr
+            );
+            let budget = Duration::from_millis(2500);
+            assert!(
+                res.duration < budget,
+                "simulated 2000 hands too slow: {:?} >= {:?}",
+                res.duration,
+                budget
+            );
+
+            let contents = fs::read_to_string(&out_path).expect("read simulation output");
+            let lines = contents.lines().filter(|l| !l.trim().is_empty()).count();
+            assert_eq!(lines, 2000, "expected 2000 hand records");
+        }
+
+        #[test]
+        fn p2_dataset_streaming_processes_large_file() {
+            let cli = CliRunner::new().expect("cli runner");
+            let tfm = TempFileManager::new().expect("temp dir");
+            let dataset = generate_records(12_000);
+            let input = tfm
+                .create_file("large.jsonl", &dataset)
+                .expect("write large dataset");
+            let outdir = tfm.create_directory("splits").expect("create splits dir");
+            let input_owned = input.to_string_lossy().into_owned();
+            let outdir_owned = outdir.to_string_lossy().into_owned();
+            let args = [
+                "dataset",
+                "--input",
+                input_owned.as_str(),
+                "--outdir",
+                outdir_owned.as_str(),
+                "--train",
+                "0.5",
+                "--val",
+                "0.25",
+                "--test",
+                "0.25",
+                "--seed",
+                "99",
+            ];
+            let env = [
+                ("AXM_DATASET_STREAM_THRESHOLD", "1000"),
+                ("AXM_DATASET_STREAM_TRACE", "1"),
+            ];
+            let res = cli.run_with_env(&args, &env);
+
+            assert_eq!(
+                res.exit_code, 0,
+                "dataset should succeed in streaming mode: stderr={}",
+                res.stderr
+            );
+            assert!(
+                res.stderr.contains("Streaming dataset input"),
+                "expected streaming trace message, stderr={}",
+                res.stderr
+            );
+            let budget = Duration::from_millis(3000);
+            assert!(
+                res.duration < budget,
+                "dataset streaming too slow: {:?} >= {:?}",
+                res.duration,
+                budget
+            );
+
+            let train = fs::read_to_string(outdir.join("train.jsonl")).expect("train split");
+            let val = fs::read_to_string(outdir.join("val.jsonl")).expect("val split");
+            let test = fs::read_to_string(outdir.join("test.jsonl")).expect("test split");
+            let total = train.lines().filter(|l| !l.trim().is_empty()).count()
+                + val.lines().filter(|l| !l.trim().is_empty()).count()
+                + test.lines().filter(|l| !l.trim().is_empty()).count();
+            assert_eq!(total, 12_000, "expected all records to be assigned");
+        }
+
+        #[test]
+        fn p3_sim_respects_timeout_limit() {
+            let cli = CliRunner::new().expect("cli runner");
+            let tfm = TempFileManager::new().expect("temp dir");
+            let slow_dir = tfm.create_directory("slow").expect("create slow dir");
+            let out_path = slow_dir.join("slow.jsonl");
+            let out_path_owned = out_path.to_string_lossy().into_owned();
+            let timeout = Duration::from_millis(250);
+
+            let res = cli.run_with_timeout(
+                &[
+                    "sim",
+                    "--hands",
+                    "100000",
+                    "--seed",
+                    "7",
+                    "--output",
+                    out_path_owned.as_str(),
+                ],
+                timeout,
+            );
+
+            assert_ne!(res.exit_code, 0, "sim should be interrupted by timeout");
+            assert!(
+                res.duration >= timeout,
+                "expected duration >= timeout, got {:?} < {:?}",
+                res.duration,
+                timeout
+            );
+
+            if let Ok(contents) = fs::read_to_string(&out_path) {
+                assert!(
+                    !contents.trim().is_empty(),
+                    "expected partial simulation output before timeout"
+                );
+            }
+        }
+    } // rust/cli/tests/integration/performance_stress.rs (14.2)
     mod data_format {
         use crate::helpers::cli_runner::CliRunner;
         use crate::helpers::temp_files::TempFileManager;
