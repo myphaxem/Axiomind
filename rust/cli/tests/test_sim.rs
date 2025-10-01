@@ -14,6 +14,8 @@ fn out_path(name: &str) -> PathBuf {
 #[test]
 fn sim_runs_n_hands_and_writes_file() {
     let path = out_path("sim");
+    // Remove any existing file to avoid data from previous runs
+    let _ = fs::remove_file(&path);
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
     let code = run(

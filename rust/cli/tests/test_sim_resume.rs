@@ -14,6 +14,8 @@ fn out_path(name: &str) -> PathBuf {
 #[test]
 fn sim_gracefully_saves_partial_and_resumes() {
     let path = out_path("sim_resume");
+    // Remove any existing file to avoid data from previous runs
+    let _ = fs::remove_file(&path);
 
     // force interruption after 3
     std::env::set_var("AXM_SIM_BREAK_AFTER", "3");

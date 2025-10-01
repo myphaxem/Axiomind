@@ -57,7 +57,7 @@ cargo test -p axm_cli -q
 ### 無視されたテストも含めて実行
 ```powershell
 # パフォーマンステストを含む全テスト
-cargo test -p axm_cli -- --ignored --include-ignored
+cargo test -p axm_cli -- --include-ignored
 ```
 
 ## 環境変数
