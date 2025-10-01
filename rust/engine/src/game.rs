@@ -2,7 +2,7 @@ use crate::player::{Player, Position};
 
 #[derive(Debug, Clone)]
 pub struct GameState {
-    level: u8,
+    _level: u8,
     button_index: usize, // 0 or 1
     players: [Player; 2],
 }
@@ -16,7 +16,7 @@ impl GameState {
             0
         };
         let mut gs = Self {
-            level,
+            _level: level,
             button_index,
             players,
         };

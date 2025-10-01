@@ -6,7 +6,7 @@ use crate::player::{Player, Position, STARTING_STACK};
 pub struct Engine {
     deck: Deck,
     players: [Player; 2],
-    level: u8,
+    _level: u8,
     board: Vec<Card>,
 }
 
@@ -21,7 +21,7 @@ impl Engine {
         Self {
             deck,
             players,
-            level,
+            _level: level,
             board: Vec::with_capacity(5),
         }
     }

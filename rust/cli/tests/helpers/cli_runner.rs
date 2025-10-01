@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use std::sync::Mutex;
 
+#[allow(dead_code)]
 pub static DOCTOR_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone)]
@@ -18,6 +19,7 @@ enum RunMode {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CliResult {
     pub exit_code: i32,
     pub stdout: String,
@@ -82,6 +84,7 @@ impl CliRunner {
         })
     }
 
+    #[allow(dead_code)]
     pub fn run(&self, args: &[&str]) -> CliResult {
         self.run_inner(args, &[], None, None)
     }
@@ -90,10 +93,12 @@ impl CliRunner {
         self.run_inner(args, env, None, None)
     }
 
+    #[allow(dead_code)]
     pub fn run_with_input(&self, args: &[&str], input: &str) -> CliResult {
         self.run_inner(args, &[], Some(input), None)
     }
 
+    #[allow(dead_code)]
     pub fn run_with_timeout(&self, args: &[&str], timeout: Duration) -> CliResult {
         self.run_inner(args, &[], None, Some(timeout))
     }
@@ -164,7 +169,6 @@ impl CliRunner {
                 }
             }
             RunMode::Library => {
-                use std::io::Write as _;
                 let _guard = EnvGuard::apply(env);
                 let mut out: Vec<u8> = Vec::new();
                 let mut err: Vec<u8> = Vec::new();

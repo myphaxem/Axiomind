@@ -58,6 +58,7 @@ impl Default for Config {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ConfigError {
     Io(std::io::Error),
     Parse(toml::de::Error),

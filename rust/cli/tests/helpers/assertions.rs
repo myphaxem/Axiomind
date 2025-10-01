@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+#[allow(dead_code)]
 pub trait PokerAssertions {
     fn assert_help_contains_commands(&self, help_text: &str);
     fn assert_jsonl_format(&self, content: &str);
@@ -10,8 +11,10 @@ pub trait PokerAssertions {
 }
 
 #[derive(Debug, Default, Copy, Clone)]
+#[allow(dead_code)]
 pub struct DefaultAsserter;
 
+#[allow(dead_code)]
 pub(crate) fn commands_list() -> &'static [&'static str] {
     &[
         "play", "replay", "sim", "eval", "stats", "verify", "deal", "bench", "rng", "cfg",
@@ -99,6 +102,7 @@ impl PokerAssertions for DefaultAsserter {
     }
 }
 
+#[allow(dead_code)]
 pub fn asserter() -> DefaultAsserter {
     DefaultAsserter
 }

@@ -170,12 +170,12 @@ pub fn compare_hands(a: &HandStrength, b: &HandStrength) -> Ordering {
 pub fn evaluate_hand_optimized(cards: &[Card; 7]) -> HandStrength {
     // leverage the same logic but use bit masks to speed straight/flush checks
     // Build rank bitset and suit counts
-    let mut rank_mask: u16 = 0;
+    let mut _rank_mask: u16 = 0;
     let mut suit_counts = [0u8; 4];
     let mut by_suit_mask: [u16; 4] = [0, 0, 0, 0];
     for &c in cards.iter() {
         let r = rank_val(c.rank);
-        rank_mask |= 1u16 << r;
+        _rank_mask |= 1u16 << r;
         let s = suit_index(c.suit);
         suit_counts[s] += 1;
         by_suit_mask[s] |= 1u16 << r;

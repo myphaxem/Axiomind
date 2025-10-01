@@ -8,11 +8,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TempFileManager {
     base_dir: PathBuf,
 }
 
 impl TempFileManager {
+    #[allow(dead_code)]
     pub fn new() -> Result<Self, String> {
         let pid = std::process::id();
         let ts = SystemTime::now()
@@ -26,12 +28,14 @@ impl TempFileManager {
         Ok(Self { base_dir: base })
     }
 
+    #[allow(dead_code)]
     pub fn create_directory<P: AsRef<Path>>(&self, name: P) -> Result<PathBuf, String> {
         let p = self.base_dir.join(name);
         fs::create_dir_all(&p).map_err(|e| format!("create_dir_all: {}", e))?;
         Ok(p)
     }
 
+    #[allow(dead_code)]
     pub fn create_file<P: AsRef<Path>>(&self, name: P, content: &str) -> Result<PathBuf, String> {
         let p = self.base_dir.join(name);
         if let Some(parent) = p.parent() {

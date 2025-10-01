@@ -21,7 +21,7 @@ pub const STARTING_STACK: u32 = 20_000;
 
 #[derive(Debug, Clone)]
 pub struct Player {
-    id: usize,
+    _id: usize,
     stack: u32,
     position: Position,
     hole: [Option<Card>; 2],
@@ -30,7 +30,7 @@ pub struct Player {
 impl Player {
     pub fn new(id: usize, stack: u32, position: Position) -> Self {
         Self {
-            id,
+            _id: id,
             stack,
             position,
             hole: [None, None],

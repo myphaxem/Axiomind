@@ -1,5 +1,3 @@
-use std::io::Write;
-
 #[test]
 fn write_error_formats_consistently() {
     let mut buf: Vec<u8> = Vec::new();
