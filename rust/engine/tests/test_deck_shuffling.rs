@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 // Failing tests first for Task 2.1 (card & deck)
 
-use axm_engine::cards::{Card, Rank, Suit};
+use axm_engine::cards::Card;
 use axm_engine::deck::Deck;
 
 #[test]
