@@ -18,6 +18,89 @@
 //! ```
 //!
 //! 上記スニペットを雛形として、新しい統合テストでも同じユーティリティを再利用してください。
+pub mod error {
+    use std::error::Error as StdError;
+    use std::fmt;
+
+    #[derive(Debug)]
+    pub struct TestError {
+        pub kind: TestErrorKind,
+        pub message: String,
+        pub source: Option<Box<dyn StdError + Send + Sync>>,
+    }
+
+    impl TestError {
+        pub fn new(kind: TestErrorKind, message: impl Into<String>) -> Self {
+            Self {
+                kind,
+                message: message.into(),
+                source: None,
+            }
+        }
+
+        pub fn with_source(
+            kind: TestErrorKind,
+            message: impl Into<String>,
+            source: impl StdError + Send + Sync + 'static,
+        ) -> Self {
+            Self {
+                kind,
+                message: message.into(),
+                source: Some(Box::new(source)),
+            }
+        }
+
+        pub fn augment<E>(self, source: E) -> Self
+        where
+            E: StdError + Send + Sync + 'static,
+        {
+            Self {
+                source: Some(Box::new(source)),
+                ..self
+            }
+        }
+    }
+
+    impl fmt::Display for TestError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}: {}", self.kind, self.message)
+        }
+    }
+
+    impl StdError for TestError {
+        fn source(&self) -> Option<&(dyn StdError + 'static)> {
+            self.source
+                .as_deref()
+                .map(|err| err as &(dyn StdError + 'static))
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum TestErrorKind {
+        BinaryNotFound,
+        ExecutionTimeout,
+        UnexpectedExitCode,
+        OutputMismatch,
+        FileOperationFailed,
+        AssertionFailed,
+    }
+
+    impl fmt::Display for TestErrorKind {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let name = match self {
+                TestErrorKind::BinaryNotFound => "binary not found",
+                TestErrorKind::ExecutionTimeout => "execution timeout",
+                TestErrorKind::UnexpectedExitCode => "unexpected exit code",
+                TestErrorKind::OutputMismatch => "output mismatch",
+                TestErrorKind::FileOperationFailed => "file operation failed",
+                TestErrorKind::AssertionFailed => "assertion failed",
+            };
+            f.write_str(name)
+        }
+    }
+}
+
+pub use error::{TestError, TestErrorKind};
 pub mod assertions;
 pub mod cli_runner;
 pub mod temp_files;

@@ -4,19 +4,20 @@ use std::time::{Duration, Instant};
 
 use std::sync::Mutex;
 
+use crate::helpers::temp_files::TempDir;
+use crate::helpers::{TestError, TestErrorKind};
+
 #[allow(dead_code)]
 pub static DOCTOR_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CliRunner {
-    mode: RunMode,
+    binary_path: PathBuf,
+    temp_dir: TempDir,
 }
 
-#[derive(Debug, Clone)]
-enum RunMode {
-    Binary(PathBuf),
-    Library,
-}
+#[allow(dead_code)]
+enum RunMode {}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -56,35 +57,23 @@ impl Drop for EnvGuard {
 }
 
 impl CliRunner {
-    pub fn new() -> Result<Self, String> {
-        // Prefer Cargo-provided path to the compiled binary
-        if let Ok(p) = std::env::var("CARGO_BIN_EXE_axm") {
-            let pb = PathBuf::from(p);
-            if pb.exists() {
-                return Ok(Self {
-                    mode: RunMode::Binary(pb),
-                });
-            }
-        }
+    pub fn new() -> Result<Self, TestError> {
+        let temp_dir = TempDir::new().map_err(|err| {
+            TestError::with_source(
+                TestErrorKind::FileOperationFailed,
+                "failed to create temporary CLI workspace",
+                err,
+            )
+        })?;
 
-        // Fallback to target/{debug|release}/axm[.exe]
-        let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
-        let mut cand = PathBuf::from(&target_dir);
-        cand.push("debug");
-        cand.push(if cfg!(windows) { "axm.exe" } else { "axm" });
-        if cand.exists() {
-            return Ok(Self {
-                mode: RunMode::Binary(cand),
-            });
-        }
+        let binary_path = Self::resolve_binary_path()?;
 
-        // Fallback to direct library invocation (no mock; calls real CLI entrypoint)
         Ok(Self {
-            mode: RunMode::Library,
+            binary_path,
+            temp_dir,
         })
     }
 
-    #[allow(dead_code)]
     pub fn run(&self, args: &[&str]) -> CliResult {
         self.run_inner(args, &[], None, None)
     }
@@ -93,12 +82,10 @@ impl CliRunner {
         self.run_inner(args, env, None, None)
     }
 
-    #[allow(dead_code)]
     pub fn run_with_input(&self, args: &[&str], input: &str) -> CliResult {
         self.run_inner(args, &[], Some(input), None)
     }
 
-    #[allow(dead_code)]
     pub fn run_with_timeout(&self, args: &[&str], timeout: Duration) -> CliResult {
         self.run_inner(args, &[], None, Some(timeout))
     }
@@ -110,84 +97,140 @@ impl CliRunner {
         input: Option<&str>,
         timeout: Option<Duration>,
     ) -> CliResult {
-        match &self.mode {
-            RunMode::Binary(bin) => {
-                let mut cmd = Command::new(bin);
-                cmd.args(args)
-                    .stdin(if input.is_some() {
-                        Stdio::piped()
-                    } else {
-                        Stdio::null()
-                    })
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped());
-                for (k, v) in env.iter() {
-                    cmd.env(k, v);
-                }
+        if self.binary_path.is_file() {
+            self.run_via_binary(args, env, input, timeout)
+        } else {
+            self.run_via_library(args, env)
+        }
+    }
 
-                let start = Instant::now();
-                let mut child = cmd.spawn().expect("failed to spawn CLI binary");
+    fn run_via_binary(
+        &self,
+        args: &[&str],
+        env: &[(&str, &str)],
+        input: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> CliResult {
+        let mut cmd = Command::new(&self.binary_path);
+        cmd.args(args)
+            .current_dir(self.temp_dir.path())
+            .stdin(if input.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
-                if let Some(s) = input {
-                    use std::io::Write as _;
-                    if let Some(mut stdin) = child.stdin.take() {
-                        let _ = stdin.write_all(s.as_bytes());
-                    }
-                }
+        for (key, value) in env.iter() {
+            cmd.env(key, value);
+        }
 
-                let (status, out, err) = if let Some(limit) = timeout {
-                    // Simple timeout: poll with try_wait
-                    loop {
-                        if let Some(_exit) = child.try_wait().expect("failed to poll child") {
-                            let output = child.wait_with_output().expect("failed to read output");
-                            break (output.status, output.stdout, output.stderr);
-                        }
-                        if start.elapsed() >= limit {
-                            let _ = child.kill();
-                            let output = child
-                                .wait_with_output()
-                                .expect("failed to collect output after kill");
-                            break (
-                                output.status, // after kill, status is non-zero
-                                output.stdout,
-                                output.stderr,
-                            );
-                        }
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                } else {
-                    let output = child.wait_with_output().expect("failed to read output");
-                    (output.status, output.stdout, output.stderr)
-                };
+        let start = Instant::now();
+        let mut child = cmd.spawn().expect("failed to spawn CLI binary");
 
-                let duration = start.elapsed();
-                CliResult {
-                    exit_code: status.code().unwrap_or(1),
-                    stdout: String::from_utf8_lossy(&out).to_string(),
-                    stderr: String::from_utf8_lossy(&err).to_string(),
-                    duration,
-                }
+        if let Some(payload) = input {
+            use std::io::Write as _;
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(payload.as_bytes());
             }
-            RunMode::Library => {
-                let _guard = EnvGuard::apply(env);
-                let mut out: Vec<u8> = Vec::new();
-                let mut err: Vec<u8> = Vec::new();
-                let start = Instant::now();
-                // Prepend program name for clap compatibility
-                let argv: Vec<String> = std::iter::once("axm".to_string())
-                    .chain(args.iter().map(|s| s.to_string()))
-                    .collect();
-                let code = axm_cli::run(argv, &mut out, &mut err);
-                let duration = start.elapsed();
-                CliResult {
-                    exit_code: code,
-                    stdout: String::from_utf8_lossy(&out).to_string(),
-                    stderr: String::from_utf8_lossy(&err).to_string(),
-                    duration,
+        }
+
+        let (status, stdout, stderr) = if let Some(limit) = timeout {
+            loop {
+                if let Some(_exit) = child.try_wait().expect("failed to poll child") {
+                    let output = child.wait_with_output().expect("failed to read output");
+                    break (output.status, output.stdout, output.stderr);
+                }
+
+                if start.elapsed() >= limit {
+                    let _ = child.kill();
+                    let output = child
+                        .wait_with_output()
+                        .expect("failed to collect output after kill");
+                    break (output.status, output.stdout, output.stderr);
+                }
+
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        } else {
+            let output = child.wait_with_output().expect("failed to read output");
+            (output.status, output.stdout, output.stderr)
+        };
+
+        let duration = start.elapsed();
+        CliResult {
+            exit_code: status.code().unwrap_or(1),
+            stdout: String::from_utf8_lossy(&stdout).to_string(),
+            stderr: String::from_utf8_lossy(&stderr).to_string(),
+            duration,
+        }
+    }
+
+    fn run_via_library(&self, args: &[&str], env: &[(&str, &str)]) -> CliResult {
+        let _guard = EnvGuard::apply(env);
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let start = Instant::now();
+        let argv: Vec<String> = std::iter::once("axm".to_string())
+            .chain(args.iter().map(|s| s.to_string()))
+            .collect();
+        let code = axm_cli::run(argv, &mut out, &mut err);
+        let duration = start.elapsed();
+        CliResult {
+            exit_code: code,
+            stdout: String::from_utf8_lossy(&out).to_string(),
+            stderr: String::from_utf8_lossy(&err).to_string(),
+            duration,
+        }
+    }
+
+    fn resolve_binary_path() -> Result<PathBuf, TestError> {
+        if let Ok(explicit) = std::env::var("CARGO_BIN_EXE_axm") {
+            let candidate = PathBuf::from(&explicit);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+
+            return Err(TestError::new(
+                TestErrorKind::BinaryNotFound,
+                format!(
+                    "CARGO_BIN_EXE_axm points to '{}', but the file does not exist",
+                    explicit
+                ),
+            ));
+        }
+
+        let executable = if cfg!(windows) { "axm.exe" } else { "axm" };
+        let mut search_roots = Vec::new();
+
+        if let Ok(custom_target) = std::env::var("CARGO_TARGET_DIR") {
+            search_roots.push(PathBuf::from(custom_target));
+        }
+
+        search_roots.push(PathBuf::from("target"));
+
+        for root in &search_roots {
+            for profile in ["debug", "release"] {
+                let candidate = root.join(profile).join(executable);
+                if candidate.is_file() {
+                    return Ok(candidate);
                 }
             }
         }
+
+        let mut fallback = search_roots
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| PathBuf::from("target"));
+        fallback = fallback.join("debug").join(executable);
+        Ok(fallback)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // Unit tests are covered via higher-level integration scenarios.
 }
 
 // No extra platform helpers needed after refactor above
