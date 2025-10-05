@@ -17,8 +17,6 @@ pub struct CliRunner {
 }
 
 #[allow(dead_code)]
-enum RunMode {}
-
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct CliResult {

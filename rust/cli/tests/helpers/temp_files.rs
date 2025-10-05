@@ -95,8 +95,8 @@ impl TempFileManager {
     }
 
     #[allow(dead_code)]
-    pub fn create_directory<P: AsRef<Path>>(&self, name: P) -> Result<PathBuf, TestError> {
-        let path = self.base_dir.path().join(name.as_ref());
+    pub fn create_directory(&self, name: &str) -> Result<PathBuf, TestError> {
+        let path = self.base_dir.path().join(name);
         fs::create_dir_all(&path).map_err(|err| {
             TestError::with_source(
                 TestErrorKind::FileOperationFailed,
@@ -108,12 +108,8 @@ impl TempFileManager {
     }
 
     #[allow(dead_code)]
-    pub fn create_file<P: AsRef<Path>>(
-        &self,
-        name: P,
-        content: &str,
-    ) -> Result<PathBuf, TestError> {
-        let path = self.base_dir.path().join(name.as_ref());
+    pub fn create_file(&self, name: &str, content: &str) -> Result<PathBuf, TestError> {
+        let path = self.base_dir.path().join(name);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|err| {
                 TestError::with_source(
