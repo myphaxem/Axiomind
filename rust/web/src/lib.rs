@@ -14,11 +14,11 @@ mod tests {
         let event_bus = ctx.event_bus();
         let sessions = ctx.sessions();
 
-        assert!(event_bus.subscriber_count() >= 0);
+        assert_eq!(event_bus.subscriber_count(), 0);
         assert!(sessions.active_sessions().is_empty());
     }
 }
 
-pub use events::EventBus;
-pub use server::AppContext;
-pub use session::{SessionId, SessionManager};
+pub use events::{EventBus, GameEvent, PlayerInfo};
+pub use server::{AppContext, ServerConfig, ServerError};
+pub use session::{GameConfig, OpponentType, SessionError, SessionId, SessionManager};

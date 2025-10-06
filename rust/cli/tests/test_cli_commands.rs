@@ -21,6 +21,16 @@ fn help_lists_expected_commands() {
 
 #[test]
 fn cfg_shows_default_settings() {
+    for key in [
+        "AXM_CONFIG",
+        "AXM_SEED",
+        "AXM_LEVEL",
+        "AXM_ADAPTIVE",
+        "AXM_AI_VERSION",
+    ] {
+        std::env::remove_var(key);
+    }
+
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
 
