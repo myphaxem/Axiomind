@@ -96,3 +96,36 @@ pub enum ServerError {
     #[error("Session error: {0}")]
     SessionError(#[from] SessionError),
 }
+
+#[derive(Debug, Clone)]
+pub struct WebServer {
+    context: AppContext,
+}
+
+impl WebServer {
+    pub fn new(config: ServerConfig) -> Result<Self, ServerError> {
+        let context = AppContext::new(config)?;
+        Ok(Self { context })
+    }
+
+    pub fn from_context(context: AppContext) -> Self {
+        Self { context }
+    }
+
+    pub async fn start(self) -> Result<ServerHandle, ServerError> {
+        todo!("web server startup not yet implemented")
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerHandle;
+
+impl ServerHandle {
+    pub fn address(&self) -> std::net::SocketAddr {
+        todo!("server address not yet available")
+    }
+
+    pub async fn shutdown(self) -> Result<(), ServerError> {
+        todo!("server shutdown not yet implemented")
+    }
+}
