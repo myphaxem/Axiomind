@@ -118,6 +118,7 @@ version = "0.1.0"
 dependencies = [
  "axm-engine",
  "clap",
+ "once_cell",
  "rand",
  "rand_chacha",
  "rusqlite",
