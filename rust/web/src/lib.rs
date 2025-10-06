@@ -3,6 +3,7 @@ pub mod handlers;
 pub mod server;
 pub mod session;
 
+pub use server::{ServerHandle, WebServer};
 #[cfg(test)]
 mod tests {
     use super::*;

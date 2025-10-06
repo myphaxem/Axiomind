@@ -2,6 +2,7 @@ use axm_web::events::{EventBus, GameEvent};
 use std::time::Duration;
 
 use axm_web::server::{ServerConfig, ServerError, WebServer};
+use warp::hyper::{self, Client as HyperClient};
 
 #[tokio::test]
 async fn event_bus_broadcasts_error_events() {
@@ -33,19 +34,23 @@ async fn web_server_serves_health_endpoint() {
     let handle = server.start().await.expect("start server");
     let address = handle.address();
 
-    let raw_response = fetch_health_response(address).await;
+    let client = HyperClient::new();
 
-    assert!(
-        raw_response.starts_with("HTTP/1.1 200"),
-        "unexpected status line: {raw_response}"
-    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
 
-    let body = raw_response
-        .split("\r\n\r\n")
-        .nth(1)
-        .expect("response body");
+    let uri: hyper::Uri = format!("http://{address}/health")
+        .parse()
+        .expect("parse uri");
 
-    let parsed: serde_json::Value = serde_json::from_str(body.trim()).expect("parse health JSON");
+    let response = client.get(uri).await.expect("request /health succeeded");
+
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+
+    let body_bytes = hyper::body::to_bytes(response.into_body())
+        .await
+        .expect("read health body");
+
+    let parsed: serde_json::Value = serde_json::from_slice(&body_bytes).expect("parse health JSON");
 
     assert_eq!(parsed["status"], "ok");
 
@@ -72,25 +77,6 @@ async fn web_server_reports_bind_error_when_port_in_use() {
         ServerError::BindError(_) => {}
         other => panic!("expected bind error, got {:?}", other),
     }
-}
-
-async fn fetch_health_response(address: std::net::SocketAddr) -> String {
-    tokio::task::spawn_blocking(move || {
-        use std::io::{Read, Write};
-
-        let mut stream = std::net::TcpStream::connect(address).expect("connect to web server");
-        stream
-            .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-            .expect("write request");
-        let _ = stream.shutdown(std::net::Shutdown::Write);
-
-        let mut buf = Vec::new();
-        stream.read_to_end(&mut buf).expect("read response");
-
-        String::from_utf8(buf).expect("response utf8")
-    })
-    .await
-    .expect("blocking task panicked")
 }
 
 fn unique_static_dir(label: &str) -> std::path::PathBuf {

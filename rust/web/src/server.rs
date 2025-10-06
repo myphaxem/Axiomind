@@ -5,6 +5,17 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 
+use crate::handlers;
+use std::net::SocketAddr;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
+use tracing::info;
+use warp::Filter;
+
+use warp::reply::Reply;
+
+use std::net::ToSocketAddrs;
+
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     host: String,
@@ -112,20 +123,157 @@ impl WebServer {
         Self { context }
     }
 
+    pub fn context(&self) -> &AppContext {
+        &self.context
+    }
+
     pub async fn start(self) -> Result<ServerHandle, ServerError> {
-        todo!("web server startup not yet implemented")
+        let WebServer { context } = self;
+        let config = context.config().clone();
+        let bind_addr = Self::bind_addr(&config)?;
+
+        let preflight = if bind_addr.port() != 0 {
+            Some(std::net::TcpListener::bind(bind_addr).map_err(ServerError::BindError)?)
+        } else {
+            None
+        };
+        drop(preflight);
+
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let routes = Self::routes(&context);
+        let shutdown_signal = async move {
+            let _ = shutdown_rx.await;
+        };
+
+        let (addr, server_future) = warp::serve(routes)
+            .try_bind_with_graceful_shutdown(bind_addr, shutdown_signal)
+            .map_err(Self::map_warp_error)?;
+
+        info(format!("web server listening on http://{}", addr));
+
+        let task = tokio::spawn(async move {
+            server_future.await;
+            Ok(())
+        });
+
+        Ok(ServerHandle::new(addr, shutdown_tx, task, context))
+    }
+
+    fn bind_addr(config: &ServerConfig) -> Result<SocketAddr, ServerError> {
+        let host = config.host();
+
+        if let Ok(addr) = host.parse::<SocketAddr>() {
+            return Ok(addr);
+        }
+
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            return Ok(SocketAddr::new(ip, config.port()));
+        }
+
+        let candidate = format!("{}:{}", host, config.port());
+        let mut addrs = candidate.to_socket_addrs().map_err(|err| {
+            ServerError::ConfigError(format!("failed to resolve address `{candidate}`: {err}"))
+        })?;
+
+        addrs.next().ok_or_else(|| {
+            ServerError::ConfigError(format!("failed to resolve address `{candidate}`"))
+        })
+    }
+
+    fn map_warp_error(err: warp::Error) -> ServerError {
+        use std::error::Error as StdError;
+
+        if let Some(source) = err.source() {
+            if let Some(io_err) = source.downcast_ref::<std::io::Error>() {
+                let recreated = std::io::Error::new(io_err.kind(), io_err.to_string());
+                return ServerError::BindError(recreated);
+            }
+        }
+
+        ServerError::ConfigError(err.to_string())
+    }
+
+    fn routes(
+        context: &AppContext,
+    ) -> impl Filter<Extract = (warp::reply::Response,), Error = warp::Rejection> + Clone {
+        let _ = context;
+        Self::health_route()
+    }
+
+    fn health_route(
+    ) -> impl Filter<Extract = (warp::reply::Response,), Error = warp::Rejection> + Clone {
+        warp::path("health")
+            .and(warp::get())
+            .and(warp::path::end())
+            .map(|| handlers::health::health().into_response())
     }
 }
 
 #[derive(Debug)]
-pub struct ServerHandle;
+pub struct ServerHandle {
+    addr: SocketAddr,
+    shutdown: Option<oneshot::Sender<()>>,
+    task: Option<JoinHandle<Result<(), ServerError>>>,
+    context: AppContext,
+}
 
 impl ServerHandle {
-    pub fn address(&self) -> std::net::SocketAddr {
-        todo!("server address not yet available")
+    fn new(
+        addr: SocketAddr,
+        shutdown: oneshot::Sender<()>,
+        task: JoinHandle<Result<(), ServerError>>,
+        context: AppContext,
+    ) -> Self {
+        Self {
+            addr,
+            shutdown: Some(shutdown),
+            task: Some(task),
+            context,
+        }
     }
 
-    pub async fn shutdown(self) -> Result<(), ServerError> {
-        todo!("server shutdown not yet implemented")
+    pub fn address(&self) -> SocketAddr {
+        self.addr
+    }
+
+    pub fn context(&self) -> &AppContext {
+        &self.context
+    }
+
+    pub async fn shutdown(mut self) -> Result<(), ServerError> {
+        if let Some(tx) = self.shutdown.take() {
+            let _ = tx.send(());
+        }
+
+        if let Some(task) = self.task.take() {
+            match task.await {
+                Ok(result) => result?,
+                Err(err) => {
+                    return Err(ServerError::ConfigError(format!(
+                        "server task join error: {err}"
+                    )))
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for ServerHandle {
+    fn drop(&mut self) {
+        if let Some(tx) = self.shutdown.take() {
+            let _ = tx.send(());
+        }
+
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
+mod tracing {
+    pub fn info(message: impl AsRef<str>) {
+        println!("{}", message.as_ref());
     }
 }
