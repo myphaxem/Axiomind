@@ -1,7 +1,10 @@
 use crate::events::{EventBus, GameEvent, PlayerInfo};
+use axm_engine::cards::Card;
 use axm_engine::engine::Engine;
 use axm_engine::logger::Street;
-use axm_engine::player::{PlayerAction, Position};
+use axm_engine::player::{PlayerAction, Position as EnginePosition};
+use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -11,6 +14,31 @@ use uuid::Uuid;
 pub type SessionId = String;
 
 const DEFAULT_SESSION_TTL: Duration = Duration::from_secs(30 * 60);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeatPosition {
+    Button,
+    BigBlind,
+}
+
+impl From<EnginePosition> for SeatPosition {
+    fn from(position: EnginePosition) -> Self {
+        match position {
+            EnginePosition::Button => SeatPosition::Button,
+            EnginePosition::BigBlind => SeatPosition::BigBlind,
+        }
+    }
+}
+
+impl From<SeatPosition> for EnginePosition {
+    fn from(position: SeatPosition) -> Self {
+        match position {
+            SeatPosition::Button => EnginePosition::Button,
+            SeatPosition::BigBlind => EnginePosition::BigBlind,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SessionManager {
@@ -139,7 +167,7 @@ impl GameSession {
             .map(|(idx, player)| PlayerInfo {
                 id: idx,
                 stack: player.stack(),
-                position: format_position(player.position()),
+                position: SeatPosition::from(player.position()),
                 is_human: idx == 0,
             })
             .collect()
@@ -159,14 +187,7 @@ impl GameSession {
     }
 }
 
-fn format_position(position: Position) -> String {
-    match position {
-        Position::Button => "button".to_string(),
-        Position::BigBlind => "big_blind".to_string(),
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GameConfig {
     pub seed: Option<u64>,
     pub level: u8,
@@ -183,13 +204,97 @@ impl Default for GameConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpponentType {
     Human,
     AI(String),
 }
 
-#[derive(Debug, Clone)]
+impl OpponentType {
+    fn as_str(&self) -> Cow<'_, str> {
+        match self {
+            OpponentType::Human => Cow::Borrowed("human"),
+            OpponentType::AI(name) => {
+                let mut value = String::with_capacity(3 + name.len());
+                value.push_str("ai:");
+                value.push_str(name);
+                Cow::Owned(value)
+            }
+        }
+    }
+}
+
+impl Serialize for OpponentType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for OpponentType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if raw.eq_ignore_ascii_case("human") {
+            return Ok(OpponentType::Human);
+        }
+
+        if let Some(rest) = raw.strip_prefix("ai:") {
+            if rest.is_empty() {
+                return Ok(OpponentType::AI("baseline".into()));
+            }
+            return Ok(OpponentType::AI(rest.to_string()));
+        }
+
+        Err(serde::de::Error::custom(format!(
+            "invalid opponent type: {raw}"
+        )))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AvailableAction {
+    #[serde(rename = "type")]
+    pub action_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_amount: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_amount: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlayerStateResponse {
+    pub id: usize,
+    pub stack: u32,
+    pub position: SeatPosition,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hole_cards: Option<Vec<Card>>,
+    pub is_active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_action: Option<PlayerAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GameStateResponse {
+    pub session_id: SessionId,
+    pub players: Vec<PlayerStateResponse>,
+    pub board: Vec<Card>,
+    pub pot: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_player: Option<usize>,
+    pub available_actions: Vec<AvailableAction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hand_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub street: Option<Street>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum GameSessionState {
     WaitingForPlayers,
     InProgress,

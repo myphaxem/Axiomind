@@ -15,6 +15,7 @@ async fn event_bus_broadcasts_error_events() {
     bus.broadcast(
         &session_id,
         GameEvent::Error {
+            session_id: session_id.clone(),
             message: "ping".into(),
         },
     );
@@ -25,7 +26,13 @@ async fn event_bus_broadcasts_error_events() {
         .expect("channel unexpectedly closed");
 
     match received {
-        GameEvent::Error { message } => assert_eq!(message, "ping"),
+        GameEvent::Error {
+            session_id,
+            message,
+        } => {
+            assert_eq!(session_id, "session");
+            assert_eq!(message, "ping")
+        }
         other => panic!("unexpected event: {:?}", other),
     }
 }

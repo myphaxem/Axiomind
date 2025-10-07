@@ -1,6 +1,8 @@
-use crate::session::SessionId;
+use crate::session::{SeatPosition, SessionId};
+use axm_engine::cards::Card;
+use axm_engine::logger::Street;
 use axm_engine::player::PlayerAction;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -88,32 +90,57 @@ impl EventBus {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameEvent {
     GameStarted {
         session_id: SessionId,
         players: Vec<PlayerInfo>,
     },
+    HandStarted {
+        session_id: SessionId,
+        hand_id: String,
+        button_player: usize,
+    },
+    CardsDealt {
+        session_id: SessionId,
+        player_id: usize,
+        cards: Option<Vec<Card>>,
+    },
+    CommunityCards {
+        session_id: SessionId,
+        cards: Vec<Card>,
+        street: Street,
+    },
     PlayerAction {
         session_id: SessionId,
         player_id: usize,
         action: PlayerAction,
     },
+    HandCompleted {
+        session_id: SessionId,
+        result: HandResult,
+    },
+    GameEnded {
+        session_id: SessionId,
+        winner: Option<usize>,
+        reason: String,
+    },
     Error {
+        session_id: SessionId,
         message: String,
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerInfo {
     pub id: usize,
     pub stack: u32,
-    pub position: String,
+    pub position: SeatPosition,
     pub is_human: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HandResult {
     pub winner_ids: Vec<usize>,
     pub pot: u32,

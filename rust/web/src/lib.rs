@@ -22,5 +22,8 @@ mod tests {
 
 pub use events::{EventBus, GameEvent, PlayerInfo};
 pub use server::{AppContext, ServerConfig, ServerError, ServerHandle, WebServer};
-pub use session::{GameConfig, OpponentType, SessionError, SessionId, SessionManager};
+pub use session::{
+    AvailableAction, GameConfig, GameSessionState, GameStateResponse, OpponentType,
+    PlayerStateResponse, SeatPosition, SessionError, SessionId, SessionManager,
+};
 pub use static_handler::{StaticError, StaticHandler};

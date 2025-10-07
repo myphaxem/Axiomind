@@ -23,7 +23,7 @@
   - Write tests for static asset serving and 404 handling
   - _Requirements: 1.2, 9.1, 9.2, 9.3, 9.5_
 
-- [ ] 4. Implement core data models and types
+- [x] 4. Implement core data models and types
   - Define SessionId, GameConfig, and session state types
   - Create GameEvent enum for real-time updates
   - Implement PlayerInfo and game state response structures
