@@ -211,10 +211,13 @@ impl WebServer {
     fn routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
         let health = Self::health_route();
         let static_routes = Self::static_routes(context);
+        let api_routes = Self::api_routes(context);
         let sse_routes = Self::sse_routes(context);
 
         health
             .or(static_routes)
+            .unify()
+            .or(api_routes)
             .unify()
             .or(sse_routes)
             .unify()
@@ -258,6 +261,76 @@ impl WebServer {
             );
 
         index.or(assets).unify().boxed()
+    }
+
+    fn api_routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
+        let sessions = context.sessions();
+
+        let create = warp::path!("api" / "sessions")
+            .and(warp::post())
+            .and(Self::with_session_manager(sessions.clone()))
+            .and(warp::body::json())
+            .and_then(
+                |sessions: Arc<SessionManager>,
+                 request: handlers::CreateSessionRequest| async move {
+                    let response = handlers::create_session(sessions, request).await;
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        let info = warp::path!("api" / "sessions" / String)
+            .and(warp::get())
+            .and(Self::with_session_manager(sessions.clone()))
+            .and_then(
+                |session_id: String, sessions: Arc<SessionManager>| async move {
+                    let response = handlers::get_session(sessions, session_id).await;
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        let state = warp::path!("api" / "sessions" / String / "state")
+            .and(warp::get())
+            .and(Self::with_session_manager(sessions.clone()))
+            .and_then(
+                |session_id: String, sessions: Arc<SessionManager>| async move {
+                    let response = handlers::get_session_state(sessions, session_id).await;
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        let actions = warp::path!("api" / "sessions" / String / "actions")
+            .and(warp::post())
+            .and(Self::with_session_manager(sessions.clone()))
+            .and(warp::body::json())
+            .and_then(
+                |session_id: String,
+                 sessions: Arc<SessionManager>,
+                 request: handlers::PlayerActionRequest| async move {
+                    let response = handlers::submit_action(sessions, session_id, request).await;
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        let delete = warp::path!("api" / "sessions" / String)
+            .and(warp::delete())
+            .and(Self::with_session_manager(sessions))
+            .and_then(
+                |session_id: String, sessions: Arc<SessionManager>| async move {
+                    let response = handlers::delete_session(sessions, session_id).await;
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        create
+            .or(state)
+            .unify()
+            .or(actions)
+            .unify()
+            .or(info)
+            .unify()
+            .or(delete)
+            .unify()
+            .boxed()
     }
 
     fn sse_routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {

@@ -131,6 +131,11 @@ impl SessionManager {
         session.state_snapshot()
     }
 
+    pub fn config(&self, session_id: &SessionId) -> Result<GameConfig, SessionError> {
+        let session = self.get_session(session_id)?;
+        Ok(session.config())
+    }
+
     pub fn process_action(
         &self,
         session_id: &SessionId,
@@ -152,6 +157,23 @@ impl SessionManager {
         self.event_bus.broadcast(session_id, event.clone());
         session.advance_turn()?;
         Ok(event)
+    }
+
+    pub fn delete_session(&self, session_id: &SessionId) -> Result<(), SessionError> {
+        match self.remove_session(session_id)? {
+            Some(_) => {
+                self.event_bus.broadcast(
+                    session_id,
+                    GameEvent::GameEnded {
+                        session_id: session_id.clone(),
+                        winner: None,
+                        reason: "terminated_by_request".into(),
+                    },
+                );
+                Ok(())
+            }
+            None => Err(SessionError::NotFound(session_id.clone())),
+        }
     }
 
     pub fn cleanup_expired_sessions(&self) {
@@ -255,6 +277,10 @@ impl GameSession {
             last_active: Mutex::new(now),
             button_tracker: Mutex::new(0),
         }
+    }
+
+    fn config(&self) -> GameConfig {
+        self.config.clone()
     }
 
     fn start_new_hand(&self) -> Result<HandMetadata, SessionError> {
