@@ -1,4 +1,6 @@
 use axm_web::events::{EventBus, GameEvent};
+use axm_web::server::AppContext;
+use axm_web::session::GameConfig;
 use std::time::Duration;
 
 use axm_web::server::{ServerConfig, ServerError, WebServer};
@@ -212,6 +214,72 @@ async fn web_server_returns_404_for_missing_asset() {
         .expect("shutdown failed");
 
     let _ = fs::remove_dir_all(&fixture);
+}
+
+#[tokio::test]
+async fn sse_endpoint_streams_published_events() {
+    let context = AppContext::new(ServerConfig::for_tests()).expect("create context");
+    let session_id = context
+        .sessions()
+        .create_session(GameConfig::default())
+        .expect("create session");
+    let event_bus = context.event_bus();
+
+    let server = WebServer::from_context(context.clone());
+    let handle = server.start().await.expect("start server");
+    let address = handle.address();
+    let client = HyperClient::new();
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let uri: hyper::Uri = format!("http://{address}/api/sessions/{}/events", session_id)
+        .parse()
+        .expect("parse sse uri");
+
+    let response = client.get(uri).await.expect("connect sse endpoint");
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get(hyper::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .expect("content-type header");
+    assert_eq!(content_type, "text/event-stream");
+
+    let mut body = response.into_body();
+
+    event_bus.broadcast(
+        &session_id,
+        GameEvent::Error {
+            session_id: session_id.clone(),
+            message: "test-message".into(),
+        },
+    );
+
+    use hyper::body::HttpBody as _;
+    let chunk = tokio::time::timeout(Duration::from_millis(250), body.data())
+        .await
+        .expect("wait for sse chunk")
+        .expect("stream closed")
+        .expect("read chunk");
+
+    let text = String::from_utf8(chunk.to_vec()).expect("sse chunk utf8");
+    assert!(
+        text.contains("event: game_event"),
+        "chunk missing event field: {text}"
+    );
+    assert!(
+        text.contains(r#""type":"error""#),
+        "chunk missing event payload: {text}"
+    );
+    assert!(
+        text.contains(r#""message":"test-message""#),
+        "chunk missing payload message: {text}"
+    );
+
+    tokio::time::timeout(Duration::from_secs(2), handle.shutdown())
+        .await
+        .expect("shutdown timed out")
+        .expect("shutdown failed");
 }
 
 fn unique_static_dir(label: &str) -> std::path::PathBuf {
