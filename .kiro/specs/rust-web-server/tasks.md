@@ -39,7 +39,7 @@
   - Write unit tests for concurrent session operations
   - _Requirements: 2.1, 2.2, 2.5, 10.3_
 
-- [ ] 6. Integrate with game engine
+- [x] 6. Integrate with game engine
   - Create EngineAdapter to wrap axm-engine functionality
   - Implement game initialization and state management
   - Add player action processing through engine

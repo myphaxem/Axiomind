@@ -5,6 +5,7 @@ use axm_engine::logger::Street;
 use axm_engine::player::{PlayerAction, Position as EnginePosition};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -67,6 +68,8 @@ impl SessionManager {
     pub fn create_session(&self, config: GameConfig) -> Result<SessionId, SessionError> {
         let id = Uuid::new_v4().to_string();
         let session = Arc::new(GameSession::new(id.clone(), config));
+        let hand = session.start_new_hand()?;
+
         {
             let mut guard = self
                 .sessions
@@ -84,14 +87,48 @@ impl SessionManager {
             },
         );
 
+        self.event_bus.broadcast(
+            &id,
+            GameEvent::HandStarted {
+                session_id: id.clone(),
+                hand_id: hand.hand_id.clone(),
+                button_player: hand.button_player,
+            },
+        );
+
+        for (player_id, cards) in hand.player_cards {
+            self.event_bus.broadcast(
+                &id,
+                GameEvent::CardsDealt {
+                    session_id: id.clone(),
+                    player_id,
+                    cards,
+                },
+            );
+        }
+
         Ok(id)
     }
 
-    pub fn get_session(&self, id: &SessionId) -> Option<Arc<GameSession>> {
-        self.sessions
+    pub fn get_session(&self, id: &SessionId) -> Result<Arc<GameSession>, SessionError> {
+        let guard = self
+            .sessions
             .read()
-            .ok()
-            .and_then(|guard| guard.get(id).cloned())
+            .map_err(|_| SessionError::StoragePoisoned)?;
+        guard
+            .get(id)
+            .cloned()
+            .ok_or_else(|| SessionError::NotFound(id.clone()))
+    }
+
+    pub fn state(&self, session_id: &SessionId) -> Result<GameStateResponse, SessionError> {
+        let session = self.get_session(session_id)?;
+        if session.is_expired(self.session_ttl) {
+            self.expire_session(session_id, "expired due to inactivity")?;
+            return Err(SessionError::Expired(session_id.clone()));
+        }
+        session.touch();
+        session.state_snapshot()
     }
 
     pub fn process_action(
@@ -99,26 +136,51 @@ impl SessionManager {
         session_id: &SessionId,
         action: PlayerAction,
     ) -> Result<GameEvent, SessionError> {
-        let session = self
-            .get_session(session_id)
-            .ok_or_else(|| SessionError::NotFound(session_id.clone()))?;
+        let session = self.get_session(session_id)?;
+        if session.is_expired(self.session_ttl) {
+            self.expire_session(session_id, "expired due to inactivity")?;
+            return Err(SessionError::Expired(session_id.clone()));
+        }
 
         session.touch();
+        let player_id = session.current_player()?.unwrap_or(0);
         let event = GameEvent::PlayerAction {
             session_id: session_id.clone(),
-            player_id: 0,
+            player_id,
             action: action.clone(),
         };
         self.event_bus.broadcast(session_id, event.clone());
+        session.advance_turn()?;
         Ok(event)
     }
 
     pub fn cleanup_expired_sessions(&self) {
-        let mut guard = match self.sessions.write() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        guard.retain(|_, session| !session.is_expired(self.session_ttl));
+        let mut expired = Vec::new();
+        {
+            let mut guard = match self.sessions.write() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            guard.retain(|id, session| {
+                if session.is_expired(self.session_ttl) {
+                    expired.push(id.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+
+        for id in expired {
+            self.event_bus.broadcast(
+                &id,
+                GameEvent::GameEnded {
+                    session_id: id.clone(),
+                    winner: None,
+                    reason: "expired".into(),
+                },
+            );
+        }
     }
 
     pub fn active_sessions(&self) -> Vec<SessionId> {
@@ -131,6 +193,30 @@ impl SessionManager {
     pub fn event_bus(&self) -> Arc<EventBus> {
         Arc::clone(&self.event_bus)
     }
+
+    fn expire_session(&self, session_id: &SessionId, reason: &str) -> Result<(), SessionError> {
+        if self.remove_session(session_id)?.is_some() {
+            self.event_bus.broadcast(
+                session_id,
+                GameEvent::GameEnded {
+                    session_id: session_id.clone(),
+                    winner: None,
+                    reason: reason.to_string(),
+                },
+            );
+        }
+        Ok(())
+    }
+
+    fn remove_session(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<Arc<GameSession>>, SessionError> {
+        match self.sessions.write() {
+            Ok(mut guard) => Ok(guard.remove(session_id)),
+            Err(_) => Err(SessionError::StoragePoisoned),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -142,6 +228,13 @@ pub struct GameSession {
     state: Mutex<GameSessionState>,
     created_at: Instant,
     last_active: Mutex<Instant>,
+    button_tracker: Mutex<usize>,
+}
+
+struct HandMetadata {
+    hand_id: String,
+    button_player: usize,
+    player_cards: Vec<(usize, Option<Vec<Card>>)>,
 }
 
 impl GameSession {
@@ -155,7 +248,75 @@ impl GameSession {
             state: Mutex::new(GameSessionState::WaitingForPlayers),
             created_at: now,
             last_active: Mutex::new(now),
+            button_tracker: Mutex::new(0),
         }
+    }
+
+    fn start_new_hand(&self) -> Result<HandMetadata, SessionError> {
+        let mut engine = self
+            .engine
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?;
+        let mut button = self
+            .button_tracker
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?;
+
+        let button_player = *button;
+        *button = 1 - *button;
+
+        for player in engine.players_mut().iter_mut() {
+            player.clear_cards();
+        }
+
+        for (idx, player) in engine.players_mut().iter_mut().enumerate() {
+            let position = if idx == button_player {
+                EnginePosition::Button
+            } else {
+                EnginePosition::BigBlind
+            };
+            player.set_position(position);
+        }
+
+        engine.shuffle();
+        engine.deal_hand().map_err(SessionError::EngineError)?;
+
+        let player_cards = engine
+            .players()
+            .iter()
+            .enumerate()
+            .map(|(idx, player)| {
+                let cards: Vec<Card> = player.hole_cards().into_iter().flatten().collect();
+                let cards = if idx == 0 && !cards.is_empty() {
+                    Some(cards)
+                } else {
+                    None
+                };
+                (idx, cards)
+            })
+            .collect();
+
+        let hand_id = Uuid::new_v4().to_string();
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| SessionError::StoragePoisoned)?;
+            *state = GameSessionState::HandInProgress {
+                hand_id: hand_id.clone(),
+                current_player: button_player,
+                street: Street::Preflop,
+            };
+        }
+        drop(engine);
+
+        self.touch();
+
+        Ok(HandMetadata {
+            hand_id,
+            button_player,
+            player_cards,
+        })
     }
 
     fn snapshot_players(&self) -> Vec<PlayerInfo> {
@@ -184,6 +345,225 @@ impl GameSession {
             Ok(last) => last.elapsed() >= ttl,
             Err(_) => false,
         }
+    }
+
+    fn current_player(&self) -> Result<Option<usize>, SessionError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?;
+        Ok(match &*state {
+            GameSessionState::HandInProgress { current_player, .. } => Some(*current_player),
+            _ => None,
+        })
+    }
+
+    fn advance_turn(&self) -> Result<(), SessionError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?;
+        if let GameSessionState::HandInProgress { current_player, .. } = &mut *state {
+            *current_player = (*current_player + 1) % 2;
+        }
+        Ok(())
+    }
+
+    fn state_snapshot(&self) -> Result<GameStateResponse, SessionError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?
+            .clone();
+
+        let (hand_id, street, current_player) = match &state {
+            GameSessionState::HandInProgress {
+                hand_id,
+                current_player,
+                street,
+            } => (Some(hand_id.clone()), Some(*street), Some(*current_player)),
+            GameSessionState::Completed { .. } => (None, Some(Street::River), None),
+            GameSessionState::Error { .. } => (None, None, None),
+            _ => (None, None, None),
+        };
+
+        let engine = self
+            .engine
+            .lock()
+            .map_err(|_| SessionError::StoragePoisoned)?;
+        let players = engine
+            .players()
+            .iter()
+            .enumerate()
+            .map(|(idx, player)| {
+                let cards_vec: Vec<Card> = player.hole_cards().into_iter().flatten().collect();
+                let hole_cards = if idx == 0 && !cards_vec.is_empty() {
+                    Some(cards_vec)
+                } else {
+                    None
+                };
+                let is_active = current_player.map_or(false, |turn| turn == idx);
+                PlayerStateResponse {
+                    id: idx,
+                    stack: player.stack(),
+                    position: SeatPosition::from(player.position()),
+                    hole_cards,
+                    is_active,
+                    last_action: None,
+                }
+            })
+            .collect();
+
+        let board_full = engine.board().clone();
+        drop(engine);
+
+        let board = visible_board(&board_full, street);
+
+        Ok(GameStateResponse {
+            session_id: self.id.clone(),
+            players,
+            board,
+            pot: 0,
+            current_player,
+            available_actions: Self::default_actions(),
+            hand_id,
+            street,
+        })
+    }
+
+    fn default_actions() -> Vec<AvailableAction> {
+        vec![
+            AvailableAction {
+                action_type: "fold".into(),
+                min_amount: None,
+                max_amount: None,
+            },
+            AvailableAction {
+                action_type: "check".into(),
+                min_amount: None,
+                max_amount: None,
+            },
+            AvailableAction {
+                action_type: "bet".into(),
+                min_amount: Some(100),
+                max_amount: Some(2_000),
+            },
+        ]
+    }
+}
+
+#[cfg(test)]
+impl GameSession {
+    fn force_last_active(&self, instant: Instant) {
+        if let Ok(mut guard) = self.last_active.lock() {
+            *guard = instant;
+        }
+    }
+}
+
+fn visible_board(cards: &[Card], street: Option<Street>) -> Vec<Card> {
+    let count = match street {
+        Some(Street::Preflop) | None => 0,
+        Some(Street::Flop) => min(3, cards.len()),
+        Some(Street::Turn) => min(4, cards.len()),
+        Some(Street::River) => min(5, cards.len()),
+    };
+    cards.iter().cloned().take(count).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn creates_session_and_provides_state() {
+        let event_bus = Arc::new(EventBus::new());
+        let manager = SessionManager::with_ttl(event_bus.clone(), Duration::from_secs(60));
+
+        let id = manager
+            .create_session(GameConfig::default())
+            .expect("create session");
+
+        let state = manager.state(&id).expect("session state");
+        assert_eq!(state.session_id, id);
+        assert_eq!(state.players.len(), 2);
+        assert!(state.hand_id.is_some());
+        assert_eq!(state.street, Some(Street::Preflop));
+        assert!(state.board.is_empty());
+
+        let session = manager.get_session(&id).expect("get session");
+        assert!(!session.is_expired(Duration::from_secs(60)));
+
+        let (_sub_id, mut rx) = manager.event_bus().subscribe(id.clone());
+        let event = manager
+            .process_action(&id, PlayerAction::Check)
+            .expect("process action");
+        match event {
+            GameEvent::PlayerAction { session_id, .. } => assert_eq!(session_id, id),
+            other => panic!("unexpected event: {:?}", other),
+        }
+
+        let delivered = rx.try_recv().expect("event delivered");
+        assert!(matches!(delivered, GameEvent::PlayerAction { .. }));
+    }
+
+    #[test]
+    fn cleanup_expired_sessions_removes_stale_entries() {
+        let event_bus = Arc::new(EventBus::new());
+        let manager = SessionManager::with_ttl(event_bus.clone(), Duration::from_secs(1));
+        let id = manager
+            .create_session(GameConfig::default())
+            .expect("create session");
+        let session = manager.get_session(&id).expect("get session");
+        let (_sub_id, mut rx) = manager.event_bus().subscribe(id.clone());
+
+        session.force_last_active(Instant::now() - Duration::from_secs(5));
+        manager.cleanup_expired_sessions();
+
+        match manager.get_session(&id) {
+            Err(SessionError::NotFound(_)) => {}
+            other => panic!("expected not found, got {:?}", other),
+        }
+
+        match rx.try_recv() {
+            Ok(GameEvent::GameEnded { reason, .. }) => assert_eq!(reason, "expired"),
+            other => panic!("unexpected event: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn concurrent_session_creation_is_safe() {
+        let event_bus = Arc::new(EventBus::new());
+        let manager = Arc::new(SessionManager::with_ttl(event_bus, Duration::from_secs(60)));
+
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            let manager = Arc::clone(&manager);
+            handles.push(thread::spawn(move || {
+                let mut ids = Vec::new();
+                for _ in 0..32 {
+                    let id = manager
+                        .create_session(GameConfig::default())
+                        .expect("create session");
+                    ids.push(id);
+                }
+                ids
+            }));
+        }
+
+        let mut unique = HashSet::new();
+        for handle in handles {
+            for id in handle.join().expect("join thread") {
+                assert!(unique.insert(id));
+            }
+        }
+
+        let active = manager.active_sessions();
+        assert_eq!(active.len(), unique.len());
     }
 }
 
