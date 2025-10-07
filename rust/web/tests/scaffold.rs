@@ -10,7 +10,7 @@ use warp::hyper::{self, Client as HyperClient};
 async fn event_bus_broadcasts_error_events() {
     let bus = EventBus::new();
     let session_id = "session".to_string();
-    let (_id, mut rx) = bus.subscribe(session_id.clone());
+    let mut sub = bus.subscribe(session_id.clone());
 
     bus.broadcast(
         &session_id,
@@ -20,7 +20,7 @@ async fn event_bus_broadcasts_error_events() {
         },
     );
 
-    let received = tokio::time::timeout(Duration::from_millis(100), rx.recv())
+    let received = tokio::time::timeout(Duration::from_millis(100), sub.receiver.recv())
         .await
         .expect("channel receive timed out")
         .expect("channel unexpectedly closed");

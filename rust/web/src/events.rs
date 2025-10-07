@@ -11,6 +11,25 @@ use tokio::sync::mpsc;
 pub type EventSender = mpsc::UnboundedSender<GameEvent>;
 pub type EventReceiver = mpsc::UnboundedReceiver<GameEvent>;
 
+pub struct EventSubscription {
+    bus: EventBus,
+    session_id: SessionId,
+    subscriber_id: usize,
+    pub receiver: EventReceiver,
+}
+
+impl EventSubscription {
+    pub fn receiver(&mut self) -> &mut EventReceiver {
+        &mut self.receiver
+    }
+}
+
+impl Drop for EventSubscription {
+    fn drop(&mut self) {
+        self.bus.unsubscribe(&self.session_id, self.subscriber_id);
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct EventBus {
     inner: Arc<EventBusInner>,
@@ -27,7 +46,17 @@ impl EventBus {
         Self::default()
     }
 
-    pub fn subscribe(&self, session_id: SessionId) -> (usize, EventReceiver) {
+    pub fn subscribe(&self, session_id: SessionId) -> EventSubscription {
+        let (subscriber_id, receiver) = self.subscribe_raw(session_id.clone());
+        EventSubscription {
+            bus: self.clone(),
+            session_id,
+            subscriber_id,
+            receiver,
+        }
+    }
+
+    fn subscribe_raw(&self, session_id: SessionId) -> (usize, EventReceiver) {
         let (tx, rx) = mpsc::unbounded_channel();
         let id = self.inner.next_id.fetch_add(1, Ordering::AcqRel);
         let mut guard = self
@@ -66,6 +95,15 @@ impl EventBus {
         self.remove_subscribers(session_id, &[subscriber_id]);
     }
 
+    pub fn drop_session(&self, session_id: &SessionId) {
+        let mut guard = self
+            .inner
+            .subscribers
+            .write()
+            .expect("subscriber lock poisoned");
+        guard.remove(session_id);
+    }
+
     pub fn subscriber_count(&self) -> usize {
         let guard = self
             .inner
@@ -87,6 +125,60 @@ impl EventBus {
                 guard.remove(session_id);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subscription_drop_unsubscribes() {
+        let bus = EventBus::new();
+        let session = "s".to_string();
+        {
+            let _sub = bus.subscribe(session.clone());
+            assert_eq!(bus.subscriber_count(), 1);
+        }
+        assert_eq!(bus.subscriber_count(), 0);
+    }
+
+    #[test]
+    fn broadcast_reaches_all_subscribers() {
+        let bus = EventBus::new();
+        let session = "s".to_string();
+        let mut sub1 = bus.subscribe(session.clone());
+        let mut sub2 = bus.subscribe(session.clone());
+
+        bus.broadcast(
+            &session,
+            GameEvent::Error {
+                session_id: session.clone(),
+                message: "ping".into(),
+            },
+        );
+
+        let ev1 = sub1.receiver.try_recv().expect("sub1 event");
+        let ev2 = sub2.receiver.try_recv().expect("sub2 event");
+        assert!(matches!(ev1, GameEvent::Error { .. }));
+        assert!(matches!(ev2, GameEvent::Error { .. }));
+    }
+
+    #[test]
+    fn stale_receiver_is_pruned() {
+        let bus = EventBus::new();
+        let session = "s".to_string();
+        let (id, rx) = bus.subscribe_raw(session.clone());
+        drop(rx);
+        bus.broadcast(
+            &session,
+            GameEvent::Error {
+                session_id: session.clone(),
+                message: "gone".into(),
+            },
+        );
+        assert_eq!(bus.subscriber_count(), 0);
+        bus.unsubscribe(&session, id); // ensure no panic when unsub after removal
     }
 }
 

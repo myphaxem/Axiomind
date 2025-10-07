@@ -47,7 +47,7 @@
   - Write integration tests with mock engine scenarios
   - _Requirements: 8.1, 8.2, 8.4, 2.4_
 
-- [ ] 7. Implement event bus for real-time updates
+- [x] 7. Implement event bus for real-time updates
   - Create EventBus with subscriber management
   - Add event broadcasting to multiple clients
   - Implement connection lifecycle handling

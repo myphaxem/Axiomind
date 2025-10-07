@@ -180,6 +180,7 @@ impl SessionManager {
                     reason: "expired".into(),
                 },
             );
+            self.event_bus.drop_session(&id);
         }
     }
 
@@ -212,10 +213,14 @@ impl SessionManager {
         &self,
         session_id: &SessionId,
     ) -> Result<Option<Arc<GameSession>>, SessionError> {
-        match self.sessions.write() {
-            Ok(mut guard) => Ok(guard.remove(session_id)),
-            Err(_) => Err(SessionError::StoragePoisoned),
+        let removed = match self.sessions.write() {
+            Ok(mut guard) => guard.remove(session_id),
+            Err(_) => return Err(SessionError::StoragePoisoned),
+        };
+        if removed.is_some() {
+            self.event_bus.drop_session(session_id);
         }
+        Ok(removed)
     }
 }
 
@@ -498,7 +503,7 @@ mod tests {
         let session = manager.get_session(&id).expect("get session");
         assert!(!session.is_expired(Duration::from_secs(60)));
 
-        let (_sub_id, mut rx) = manager.event_bus().subscribe(id.clone());
+        let mut sub = manager.event_bus().subscribe(id.clone());
         let event = manager
             .process_action(&id, PlayerAction::Check)
             .expect("process action");
@@ -507,7 +512,7 @@ mod tests {
             other => panic!("unexpected event: {:?}", other),
         }
 
-        let delivered = rx.try_recv().expect("event delivered");
+        let delivered = sub.receiver.try_recv().expect("event delivered");
         assert!(matches!(delivered, GameEvent::PlayerAction { .. }));
     }
 
@@ -519,7 +524,7 @@ mod tests {
             .create_session(GameConfig::default())
             .expect("create session");
         let session = manager.get_session(&id).expect("get session");
-        let (_sub_id, mut rx) = manager.event_bus().subscribe(id.clone());
+        let mut sub = manager.event_bus().subscribe(id.clone());
 
         session.force_last_active(Instant::now() - Duration::from_secs(5));
         manager.cleanup_expired_sessions();
@@ -529,7 +534,7 @@ mod tests {
             other => panic!("expected not found, got {:?}", other),
         }
 
-        match rx.try_recv() {
+        match sub.receiver.try_recv() {
             Ok(GameEvent::GameEnded { reason, .. }) => assert_eq!(reason, "expired"),
             other => panic!("unexpected event: {:?}", other),
         }
