@@ -211,7 +211,14 @@ impl WebServer {
     fn routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
         let health = Self::health_route();
         let static_routes = Self::static_routes(context);
-        health.or(static_routes).unify().boxed()
+        let sse_routes = Self::sse_routes(context);
+
+        health
+            .or(static_routes)
+            .unify()
+            .or(sse_routes)
+            .unify()
+            .boxed()
     }
 
     fn health_route() -> BoxedFilter<(warp::reply::Response,)> {
@@ -253,10 +260,42 @@ impl WebServer {
         index.or(assets).unify().boxed()
     }
 
+    fn sse_routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
+        let sessions = context.sessions();
+        let event_bus = context.event_bus();
+
+        warp::path!("api" / "sessions" / String / "events")
+            .and(warp::get())
+            .and(Self::with_session_manager(sessions))
+            .and(Self::with_event_bus(event_bus))
+            .and_then(
+                |session_id: String,
+                 sessions: Arc<SessionManager>,
+                 event_bus: Arc<EventBus>| async move {
+                    let response =
+                        handlers::sse::stream_events(session_id, sessions, event_bus).await;
+                    Ok::<_, Infallible>(response)
+                },
+            )
+            .boxed()
+    }
+
     fn with_static_handler(
         handler: Arc<StaticHandler>,
     ) -> impl Filter<Extract = (Arc<StaticHandler>,), Error = Infallible> + Clone {
         warp::any().map(move || handler.clone())
+    }
+
+    fn with_session_manager(
+        sessions: Arc<SessionManager>,
+    ) -> impl Filter<Extract = (Arc<SessionManager>,), Error = Infallible> + Clone {
+        warp::any().map(move || Arc::clone(&sessions))
+    }
+
+    fn with_event_bus(
+        event_bus: Arc<EventBus>,
+    ) -> impl Filter<Extract = (Arc<EventBus>,), Error = Infallible> + Clone {
+        warp::any().map(move || Arc::clone(&event_bus))
     }
 }
 

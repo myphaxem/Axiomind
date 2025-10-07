@@ -264,7 +264,7 @@ async fn sse_endpoint_streams_published_events() {
 
     let text = String::from_utf8(chunk.to_vec()).expect("sse chunk utf8");
     assert!(
-        text.contains("event: game_event"),
+        text.contains("event:game_event") || text.contains("event: game_event"),
         "chunk missing event field: {text}"
     );
     assert!(
@@ -275,6 +275,8 @@ async fn sse_endpoint_streams_published_events() {
         text.contains(r#""message":"test-message""#),
         "chunk missing payload message: {text}"
     );
+
+    drop(body);
 
     tokio::time::timeout(Duration::from_secs(2), handle.shutdown())
         .await
