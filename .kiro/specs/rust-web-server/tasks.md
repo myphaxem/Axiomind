@@ -63,7 +63,7 @@
   - Write integration tests for SSE event delivery
   - _Requirements: 3.1, 3.2, 3.3, 3.5_
 
-- [ ] 9. Create game API endpoints
+- [x] 9. Create game API endpoints
   - Implement POST /api/sessions for session creation
   - Add GET /api/sessions/{id}/state for game state retrieval
   - Create POST /api/sessions/{id}/actions for player actions
