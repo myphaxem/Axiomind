@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Axiomind Poker</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <script src="/static/js/htmx.min.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Axiomind Poker</h1>
+      <p class="tagline">Heads-up no-limit hold'em training table</p>
+    </header>
+    <main class="table-shell">
+      <section
+        id="table"
+        class="table felt"
+        hx-get="/api/sessions"
+        hx-trigger="load"
+        hx-target="#table"
+        hx-swap="innerHTML"
+      >
+        <p class="table-placeholder">Loading table…</p>
+      </section>
+    </main>
+  </body>
+</html>

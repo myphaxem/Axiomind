@@ -5,6 +5,29 @@ use std::sync::Mutex;
 
 static ENV_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+struct TempEnvVar {
+    key: &'static str,
+    previous: Option<String>,
+}
+
+impl TempEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for TempEnvVar {
+    fn drop(&mut self) {
+        if let Some(prev) = &self.previous {
+            std::env::set_var(self.key, prev);
+        } else {
+            std::env::remove_var(self.key);
+        }
+    }
+}
+
 #[test]
 fn help_lists_expected_commands() {
     let _env = ENV_GUARD.lock().unwrap();
@@ -91,6 +114,7 @@ fn play_parses_args() {
 #[test]
 fn invalid_vs_value_shows_error() {
     let _env = ENV_GUARD.lock().unwrap();
+    let _non_tty = TempEnvVar::set("AXM_NON_TTY", "1");
 
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();

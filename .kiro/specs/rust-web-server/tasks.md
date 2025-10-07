@@ -15,7 +15,7 @@
   - Write unit tests for server lifecycle
   - _Requirements: 1.1, 1.2, 1.4, 10.4_
 
-- [ ] 3. Create static file serving capability
+- [x] 3. Create static file serving capability
   - Implement StaticHandler for HTML, CSS, JS assets
   - Add proper MIME type detection and caching headers
   - Create basic HTML template with htmx integration

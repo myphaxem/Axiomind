@@ -2,8 +2,8 @@ pub mod events;
 pub mod handlers;
 pub mod server;
 pub mod session;
+pub mod static_handler;
 
-pub use server::{ServerHandle, WebServer};
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -21,5 +21,6 @@ mod tests {
 }
 
 pub use events::{EventBus, GameEvent, PlayerInfo};
-pub use server::{AppContext, ServerConfig, ServerError};
+pub use server::{AppContext, ServerConfig, ServerError, ServerHandle, WebServer};
 pub use session::{GameConfig, OpponentType, SessionError, SessionId, SessionManager};
+pub use static_handler::{StaticError, StaticHandler};

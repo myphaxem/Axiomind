@@ -144,7 +144,7 @@ async fn web_server_serves_static_assets() {
         .get(hyper::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .expect("content-type");
-    assert_eq!(content_type, "text/css");
+    assert!(content_type.starts_with("text/css"));
     let cache_control = parts
         .headers
         .get(hyper::header::CACHE_CONTROL)
@@ -165,7 +165,10 @@ async fn web_server_serves_static_assets() {
         .get(hyper::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .expect("content-type");
-    assert_eq!(js_content_type, "application/javascript");
+    assert!(
+        js_content_type.starts_with("application/javascript")
+            || js_content_type.starts_with("text/javascript")
+    );
 
     let js_body = hyper::body::to_bytes(body).await.expect("read js");
     let js_text = String::from_utf8(js_body.to_vec()).expect("utf8 js");

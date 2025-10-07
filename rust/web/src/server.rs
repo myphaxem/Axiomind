@@ -1,5 +1,7 @@
 use crate::events::EventBus;
 use crate::session::{SessionError, SessionManager};
+use crate::static_handler::StaticHandler;
+use std::convert::Infallible;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,9 +12,9 @@ use std::net::SocketAddr;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::info;
-use warp::Filter;
-
+use warp::filters::BoxedFilter;
 use warp::reply::Reply;
+use warp::Filter;
 
 use std::net::ToSocketAddrs;
 
@@ -55,6 +57,7 @@ pub struct AppContext {
     config: ServerConfig,
     event_bus: Arc<EventBus>,
     sessions: Arc<SessionManager>,
+    static_handler: Arc<StaticHandler>,
 }
 
 impl AppContext {
@@ -66,18 +69,26 @@ impl AppContext {
 
         let event_bus = Arc::new(EventBus::new());
         let sessions = Arc::new(SessionManager::new(Arc::clone(&event_bus)));
-        Ok(Self::new_with_dependencies(config, event_bus, sessions))
+        let static_handler = Arc::new(StaticHandler::new(config.static_dir().to_path_buf()));
+        Ok(Self::new_with_dependencies(
+            config,
+            event_bus,
+            sessions,
+            static_handler,
+        ))
     }
 
     pub fn new_with_dependencies(
         config: ServerConfig,
         event_bus: Arc<EventBus>,
         sessions: Arc<SessionManager>,
+        static_handler: Arc<StaticHandler>,
     ) -> Self {
         Self {
             config,
             event_bus,
             sessions,
+            static_handler,
         }
     }
 
@@ -95,6 +106,10 @@ impl AppContext {
 
     pub fn sessions(&self) -> Arc<SessionManager> {
         Arc::clone(&self.sessions)
+    }
+
+    pub fn static_handler(&self) -> Arc<StaticHandler> {
+        Arc::clone(&self.static_handler)
     }
 }
 
@@ -193,19 +208,55 @@ impl WebServer {
         ServerError::ConfigError(err.to_string())
     }
 
-    fn routes(
-        context: &AppContext,
-    ) -> impl Filter<Extract = (warp::reply::Response,), Error = warp::Rejection> + Clone {
-        let _ = context;
-        Self::health_route()
+    fn routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
+        let health = Self::health_route();
+        let static_routes = Self::static_routes(context);
+        health.or(static_routes).unify().boxed()
     }
 
-    fn health_route(
-    ) -> impl Filter<Extract = (warp::reply::Response,), Error = warp::Rejection> + Clone {
+    fn health_route() -> BoxedFilter<(warp::reply::Response,)> {
         warp::path("health")
             .and(warp::get())
             .and(warp::path::end())
             .map(|| handlers::health::health().into_response())
+            .boxed()
+    }
+
+    fn static_routes(context: &AppContext) -> BoxedFilter<(warp::reply::Response,)> {
+        let handler = context.static_handler();
+
+        let index = warp::path::end()
+            .and(warp::get())
+            .and(Self::with_static_handler(handler.clone()))
+            .and_then(|handler: Arc<StaticHandler>| async move {
+                let response = handler
+                    .index()
+                    .await
+                    .unwrap_or_else(|err| handler.error_response(err));
+                Ok::<_, Infallible>(response)
+            });
+
+        let assets = warp::path("static")
+            .and(warp::path::tail())
+            .and(warp::get())
+            .and(Self::with_static_handler(handler))
+            .and_then(
+                |tail: warp::path::Tail, handler: Arc<StaticHandler>| async move {
+                    let response = handler
+                        .asset(tail.as_str())
+                        .await
+                        .unwrap_or_else(|err| handler.error_response(err));
+                    Ok::<_, Infallible>(response)
+                },
+            );
+
+        index.or(assets).unify().boxed()
+    }
+
+    fn with_static_handler(
+        handler: Arc<StaticHandler>,
+    ) -> impl Filter<Extract = (Arc<StaticHandler>,), Error = Infallible> + Clone {
+        warp::any().map(move || handler.clone())
     }
 }
 
